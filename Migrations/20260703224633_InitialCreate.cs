@@ -15,12 +15,13 @@ namespace BlazorWebAppMovies.Migrations
                 name: "Movie",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    Title = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    ReleaseDate = table.Column<DateOnly>(type: "date", nullable: false),
-                    Genre = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    Price = table.Column<decimal>(type: "decimal(18,2)", nullable: false)
+                    Id = table.Column<int>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    Title = table.Column<string>(type: "TEXT", maxLength: 60, nullable: false),
+                    ReleaseDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
+                    Genre = table.Column<string>(type: "TEXT", maxLength: 30, nullable: false),
+                    Price = table.Column<decimal>(type: "decimal(18, 2)", nullable: false),
+                    Rating = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
