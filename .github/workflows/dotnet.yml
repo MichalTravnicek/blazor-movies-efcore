@@ -25,10 +25,10 @@ jobs:
     - name: Build
       run: dotnet build --no-restore
     - name: Test
-      run: dotnet test --no-build --verbosity normal || true
+      run: dotnet test --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx"
     - name: Publish Test Report
       uses: dorny/test-reporter@v3.0.0
-      if: always() && hashFiles('**/TestResults/**/*.trx') != ''
+      if: always()
       with:
         name: .NET Test Results
         path: '**/TestResults/**/*.trx'
