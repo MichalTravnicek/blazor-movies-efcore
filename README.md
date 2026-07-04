@@ -89,8 +89,8 @@ The seed data (`SeedData.Initialize`) populates the database with sample movies 
 
 ## Default URLs
 
-- HTTPS: `https://localhost:7073`
-- HTTP: `http://localhost:5261`
+- HTTPS: `https://localhost:7083`
+- HTTP: `http://localhost:5216`
 
 You can change these in `Properties/launchSettings.json`.
 

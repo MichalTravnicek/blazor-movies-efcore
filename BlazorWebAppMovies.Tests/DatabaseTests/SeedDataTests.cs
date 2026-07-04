@@ -6,25 +6,25 @@ namespace BlazorWebAppMovies.Tests.DatabaseTests;
 
 public class SeedDataTests
 {
-    private static ServiceProvider CreateServiceProvider(string? dbName = null)
+    private static IDbContextFactory<BlazorWebAppMoviesContext> CreateDbContextFactory(string? dbName = null)
     {
         var services = new ServiceCollection();
 
-        services.AddDbContext<BlazorWebAppMoviesContext>(options =>
+        services.AddDbContextFactory<BlazorWebAppMoviesContext>(options =>
             options.UseInMemoryDatabase(databaseName: dbName ?? Guid.NewGuid().ToString()));
 
-        return services.BuildServiceProvider();
+        return services.BuildServiceProvider()
+            .GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
     }
 
     [Fact]
     public void SeedData_SeedsMovies_WhenDatabaseEmpty()
     {
-        var serviceProvider = CreateServiceProvider();
+        var factory = CreateDbContextFactory();
 
-        using var scope = serviceProvider.CreateScope();
-        SeedData.Initialize(scope.ServiceProvider);
+        SeedData.Initialize(factory);
 
-        var context = scope.ServiceProvider.GetRequiredService<BlazorWebAppMoviesContext>();
+        using var context = factory.CreateDbContext();
         var movies = context.Movie.ToList();
         Assert.NotEmpty(movies);
     }
@@ -32,15 +32,14 @@ public class SeedDataTests
     [Fact]
     public void SeedData_DoesNotDuplicate_WhenAlreadySeeded()
     {
-        var serviceProvider = CreateServiceProvider();
+        var factory = CreateDbContextFactory();
 
-        using var scope = serviceProvider.CreateScope();
         // First call seeds
-        SeedData.Initialize(scope.ServiceProvider);
+        SeedData.Initialize(factory);
         // Second call should not duplicate
-        SeedData.Initialize(scope.ServiceProvider);
+        SeedData.Initialize(factory);
 
-        var context = scope.ServiceProvider.GetRequiredService<BlazorWebAppMoviesContext>();
+        using var context = factory.CreateDbContext();
 
         // Assert that Mad Max appears only once (unique by title check)
         var madMaxCount = context.Movie.Count(m => m.Title == "Mad Max");
@@ -50,12 +49,11 @@ public class SeedDataTests
     [Fact]
     public void SeedData_ContainsExpectedMovies()
     {
-        var serviceProvider = CreateServiceProvider();
+        var factory = CreateDbContextFactory();
 
-        using var scope = serviceProvider.CreateScope();
-        SeedData.Initialize(scope.ServiceProvider);
+        SeedData.Initialize(factory);
 
-        var context = scope.ServiceProvider.GetRequiredService<BlazorWebAppMoviesContext>();
+        using var context = factory.CreateDbContext();
         var movies = context.Movie.ToList();
 
         Assert.Contains(movies, m => m.Title == "Mad Max");
@@ -69,12 +67,11 @@ public class SeedDataTests
     [Fact]
     public void SeedData_MoviesHaveValidData()
     {
-        var serviceProvider = CreateServiceProvider();
+        var factory = CreateDbContextFactory();
 
-        using var scope = serviceProvider.CreateScope();
-        SeedData.Initialize(scope.ServiceProvider);
+        SeedData.Initialize(factory);
 
-        var context = scope.ServiceProvider.GetRequiredService<BlazorWebAppMoviesContext>();
+        using var context = factory.CreateDbContext();
         var furyRoad = context.Movie.First(m => m.Title == "Mad Max: Fury Road");
 
         Assert.Equal(new DateOnly(2015, 5, 15), furyRoad.ReleaseDate);

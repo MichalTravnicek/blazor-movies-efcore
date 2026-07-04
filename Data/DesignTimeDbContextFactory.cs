@@ -20,14 +20,14 @@ namespace BlazorWebAppMovies.Data
                 var connectionString = configuration.GetConnectionString("BlazorWebAppMoviesContextSqlServer")
                     ?? throw new InvalidOperationException("SQL Server connection string not found.");
                 optionsBuilder.UseSqlServer(connectionString);
-                return new BlazorWebAppMoviesContextSqlServer(optionsBuilder.Options);
+                return new BlazorWebAppMoviesContext(optionsBuilder.Options);
             }
             else
             {
                 var connectionString = configuration.GetConnectionString("BlazorWebAppMoviesContext")
                     ?? throw new InvalidOperationException("SQLite connection string not found.");
                 optionsBuilder.UseSqlite(connectionString);
-                return new BlazorWebAppMoviesContextSqlite(optionsBuilder.Options);
+                return new BlazorWebAppMoviesContext(optionsBuilder.Options);
             }
         }
     }

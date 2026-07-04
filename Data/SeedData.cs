@@ -5,17 +5,9 @@ namespace BlazorWebAppMovies.Data;
 
 public class SeedData
 {
-    public static void Initialize(IServiceProvider serviceProvider)
+    public static void Initialize(IDbContextFactory<BlazorWebAppMoviesContext> factory)
     {
-        using var context = new BlazorWebAppMoviesContext(
-            serviceProvider.GetRequiredService<
-                DbContextOptions<BlazorWebAppMoviesContext>>());
-
-        if (context == null || context.Movie == null)
-        {
-            throw new NullReferenceException(
-                "Null BlazorWebAppMoviesContext or Movie DbSet");
-        }
+        using var context = factory.CreateDbContext();
 
         if (context.Movie.Any())
         {

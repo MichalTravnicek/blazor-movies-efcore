@@ -9,6 +9,7 @@ public class Movie
 
     [Required]
     [StringLength(60, MinimumLength = 3)]
+    [RegularExpression(@".*\S+.*", ErrorMessage = "Title cannot be only whitespace.")]
     public string? Title { get; set; }
 
     public DateOnly ReleaseDate { get; set; }
@@ -24,6 +25,6 @@ public class Movie
     public decimal Price { get; set; }
 
     [Required]
-    [RegularExpression(@"^(G|PG|PG-13|R|NC-17)$")]
+    [RegularExpression(@"^(?i)(G|PG|PG-13|R|NC-17)$")]
     public string? Rating { get; set; }
 }

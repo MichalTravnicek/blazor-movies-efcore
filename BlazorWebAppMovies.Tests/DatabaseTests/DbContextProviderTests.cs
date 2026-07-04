@@ -12,7 +12,7 @@ public class DbContextProviderTests
         using var context = factory.CreateDbContext([]);
 
         Assert.NotNull(context);
-        Assert.IsType<BlazorWebAppMoviesContextSqlite>(context);
+        Assert.IsType<BlazorWebAppMoviesContext>(context);
     }
 
     [Fact]
@@ -37,7 +37,7 @@ public class DbContextProviderTests
             using var context = factory.CreateDbContext([]);
 
             Assert.NotNull(context);
-            Assert.IsType<BlazorWebAppMoviesContextSqlServer>(context);
+            Assert.IsType<BlazorWebAppMoviesContext>(context);
         }
         finally
         {
