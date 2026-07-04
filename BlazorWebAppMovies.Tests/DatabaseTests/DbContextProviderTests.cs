@@ -8,9 +8,45 @@ public class DbContextProviderTests
     [Fact]
     public void DesignTimeDbContextFactory_CreatesSqliteContext()
     {
-        // This tests the factory's ability to resolve the SQLite provider path
         var factory = new DesignTimeDbContextFactory();
-        Assert.NotNull(factory);
+        using var context = factory.CreateDbContext([]);
+
+        Assert.NotNull(context);
+        Assert.IsType<BlazorWebAppMoviesContextSqlite>(context);
+    }
+
+    [Fact]
+    public void DesignTimeDbContextFactory_CreatesSqlServerContext()
+    {
+        const string configFileName = "appsettings.json";
+        var originalContent = File.Exists(configFileName) ? File.ReadAllText(configFileName) : null;
+
+        try
+        {
+            // Override appsettings.json to use SqlServer provider
+            File.WriteAllText(configFileName, /*lang=json*/ """
+            {
+              "DatabaseProvider": "SqlServer",
+              "ConnectionStrings": {
+                "BlazorWebAppMoviesContextSqlServer": "Server=(localdb)\\mssqllocaldb;Database=BlazorWebAppMoviesTest;Trusted_Connection=True;TrustServerCertificate=True;"
+              }
+            }
+            """);
+
+            var factory = new DesignTimeDbContextFactory();
+            using var context = factory.CreateDbContext([]);
+
+            Assert.NotNull(context);
+            Assert.IsType<BlazorWebAppMoviesContextSqlServer>(context);
+        }
+        finally
+        {
+            // Restore original appsettings.json
+            if (originalContent != null)
+                File.WriteAllText(configFileName, originalContent);
+            else if (File.Exists(configFileName))
+                File.Delete(configFileName);
+        }
     }
 
     [Fact]

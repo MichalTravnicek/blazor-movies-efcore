@@ -20,11 +20,6 @@
 
   <ItemGroup>
     <Folder Include="Migrations\" />
-    <Folder Include="Tests\DatabaseTests\" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Include="BlazorWebAppMovies.Tests\BlazorWebAppMovies.Tests.csproj" />
   </ItemGroup>
   
   <ItemGroup>
