@@ -1,4 +1,6 @@
 using BlazorWebAppMovies.Data;
+using BlazorWebAppMovies.Models;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -6,23 +8,35 @@ namespace BlazorWebAppMovies.Tests.DatabaseTests;
 
 public class SeedDataTests
 {
-    private static IDbContextFactory<BlazorWebAppMoviesContext> CreateDbContextFactory(string? dbName = null)
+    private static (IDbContextFactory<BlazorWebAppMoviesContext>, IServiceProvider) CreateServices(string? dbName = null)
     {
+        var dbNameResolved = dbName ?? Guid.NewGuid().ToString();
         var services = new ServiceCollection();
 
         services.AddDbContextFactory<BlazorWebAppMoviesContext>(options =>
-            options.UseInMemoryDatabase(databaseName: dbName ?? Guid.NewGuid().ToString()));
+            options.UseInMemoryDatabase(databaseName: dbNameResolved));
 
-        return services.BuildServiceProvider()
-            .GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
+        services.AddDbContext<BlazorWebAppMoviesContext>(options =>
+            options.UseInMemoryDatabase(databaseName: dbNameResolved));
+
+        services.AddIdentity<User, IdentityRole>()
+            .AddEntityFrameworkStores<BlazorWebAppMoviesContext>()
+            .AddDefaultTokenProviders();
+
+        services.AddLogging();
+
+        var serviceProvider = services.BuildServiceProvider();
+        var factory = serviceProvider.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
+
+        return (factory, serviceProvider);
     }
 
     [Fact]
-    public void SeedData_SeedsMovies_WhenDatabaseEmpty()
+    public async Task SeedData_SeedsMovies_WhenDatabaseEmpty()
     {
-        var factory = CreateDbContextFactory();
+        var (factory, services) = CreateServices();
 
-        SeedData.Initialize(factory);
+        await SeedData.Initialize(factory, services);
 
         using var context = factory.CreateDbContext();
         var movies = context.Movie.ToList();
@@ -30,28 +44,28 @@ public class SeedDataTests
     }
 
     [Fact]
-    public void SeedData_DoesNotDuplicate_WhenAlreadySeeded()
+    public async Task SeedData_DoesNotDuplicate_WhenAlreadySeeded()
     {
-        var factory = CreateDbContextFactory();
+        var (factory, services) = CreateServices();
 
         // First call seeds
-        SeedData.Initialize(factory);
+        await SeedData.Initialize(factory, services);
         // Second call should not duplicate
-        SeedData.Initialize(factory);
+        await SeedData.Initialize(factory, services);
 
         using var context = factory.CreateDbContext();
 
-        // Assert that Mad Max appears only once (unique by title check)
+        // Assert that Mad Max appears only once
         var madMaxCount = context.Movie.Count(m => m.Title == "Mad Max");
         Assert.Equal(1, madMaxCount);
     }
 
     [Fact]
-    public void SeedData_ContainsExpectedMovies()
+    public async Task SeedData_ContainsExpectedMovies()
     {
-        var factory = CreateDbContextFactory();
+        var (factory, services) = CreateServices();
 
-        SeedData.Initialize(factory);
+        await SeedData.Initialize(factory, services);
 
         using var context = factory.CreateDbContext();
         var movies = context.Movie.ToList();
@@ -65,11 +79,11 @@ public class SeedDataTests
     }
 
     [Fact]
-    public void SeedData_MoviesHaveValidData()
+    public async Task SeedData_MoviesHaveValidData()
     {
-        var factory = CreateDbContextFactory();
+        var (factory, services) = CreateServices();
 
-        SeedData.Initialize(factory);
+        await SeedData.Initialize(factory, services);
 
         using var context = factory.CreateDbContext();
         var furyRoad = context.Movie.First(m => m.Title == "Mad Max: Fury Road");

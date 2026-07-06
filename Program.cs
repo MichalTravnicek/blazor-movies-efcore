@@ -56,11 +56,27 @@ builder.Services.AddAuthentication(options =>
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)),
+            RoleClaimType = "role"
+        };
+
+        // Also read JWT from cookie for Blazor Server SignalR circuit
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var token = context.Request.Cookies["auth_token"];
+                if (!string.IsNullOrEmpty(token))
+                {
+                    context.Token = token;
+                }
+                return Task.CompletedTask;
+            }
         };
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddCascadingAuthenticationState();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -117,7 +133,7 @@ using (var scope = app.Services.CreateScope())
         using var context = factory.CreateDbContext();
         context.Database.Migrate();
 
-        SeedData.Initialize(services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>());
+        SeedData.Initialize(services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>(), services).GetAwaiter().GetResult();
     }
     else
     {
@@ -125,7 +141,7 @@ using (var scope = app.Services.CreateScope())
         using var context = factory.CreateDbContext();
         context.Database.Migrate();
 
-        SeedData.Initialize(factory);
+        SeedData.Initialize(factory, services).GetAwaiter().GetResult();
     }
 }
 

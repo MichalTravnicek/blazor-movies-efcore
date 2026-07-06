@@ -1,7 +1,124 @@
 ﻿@page "/"
+@rendermode InteractiveServer
+@inject UserManager<User> UserManager
+@inject IJSRuntime JS
 
 <PageTitle>Home</PageTitle>
 
-<h1>Hello, world!</h1>
+@if (authState?.User.Identity?.IsAuthenticated == true)
+{
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <h1>Welcome, @currentUserName!</h1>
+                <p class="lead">You are logged in as @authState.User.Identity?.Name</p>
 
-Welcome to your new app.
+                @if (isAdmin)
+                {
+                    <div class="alert alert-info" role="alert">
+                        You have administrator privileges.
+                        <a href="usermanagement" class="alert-link">Go to User Management</a>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-6 col-lg-4">
+                <div class="card shadow">
+                    <div class="card-body p-4">
+                        <h3 class="card-title text-center mb-4">Sign In</h3>
+
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="alert alert-danger" role="alert">
+                                @errorMessage
+                            </div>
+                        }
+
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <input id="email" type="email" class="form-control" @bind="email"
+                                   placeholder="Enter your email" />
+                        </div>
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Password</label>
+                            <input id="password" type="password" class="form-control" @bind="password"
+                                   placeholder="Enter your password" />
+                        </div>
+                        <button class="btn btn-primary w-100" @onclick="HandleLogin" disabled="@isLoading">
+                            @if (isLoading)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            }
+                            Sign In
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private AuthenticationState? authState;
+    private string? currentUserName;
+    private bool isAdmin;
+    private string? errorMessage;
+    private string email = "";
+    private string password = "";
+    private bool isLoading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthStateTask is not null)
+        {
+            authState = await AuthStateTask;
+            if (authState.User.Identity?.IsAuthenticated == true)
+            {
+                var user = await UserManager.GetUserAsync(authState.User);
+                currentUserName = user?.Name ?? authState.User.Identity.Name;
+                isAdmin = authState.User.IsInRole("Admin");
+            }
+        }
+    }
+
+    private async Task HandleLogin()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            Console.WriteLine($"[Blazor] Login button clicked for: {email}");
+            var result = await JS.InvokeAsync<LoginResult>("window.authService.login", email, password);
+            if (!result.Success)
+            {
+                errorMessage = result.Message;
+                Console.WriteLine($"[Blazor] Login failed: {result.Message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+            Console.WriteLine($"[Blazor] Login exception: {ex}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private class LoginResult
+    {
+        public bool Success { get; set; }
+        public string? Message { get; set; }
+    }
+}

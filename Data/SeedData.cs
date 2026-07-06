@@ -1,14 +1,48 @@
 using Microsoft.EntityFrameworkCore;
 using BlazorWebAppMovies.Models;
+using Microsoft.AspNetCore.Identity;
 
 namespace BlazorWebAppMovies.Data;
 
 public class SeedData
 {
-    public static void Initialize(IDbContextFactory<BlazorWebAppMoviesContext> factory)
+    private static async Task SeedRolesAndAdmin(IServiceProvider serviceProvider)
     {
-        using var context = factory.CreateDbContext();
+        var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+        var userManager = serviceProvider.GetRequiredService<UserManager<User>>();
 
+        if (!await roleManager.RoleExistsAsync("Admin"))
+        {
+            await roleManager.CreateAsync(new IdentityRole("Admin"));
+        }
+
+        if (!await roleManager.RoleExistsAsync("User"))
+        {
+            await roleManager.CreateAsync(new IdentityRole("User"));
+        }
+
+        var adminEmail = "admin@example.com";
+        var adminUser = await userManager.FindByEmailAsync(adminEmail);
+
+        if (adminUser == null)
+        {
+            adminUser = new User
+            {
+                UserName = adminEmail,
+                Email = adminEmail,
+                Name = "Admin"
+            };
+
+            var result = await userManager.CreateAsync(adminUser, "Admin123!");
+            if (result.Succeeded)
+            {
+                await userManager.AddToRoleAsync(adminUser, "Admin");
+            }
+        }
+    }
+
+    private static void SeedMovies(BlazorWebAppMoviesContext context)
+    {
         if (context.Movie.Any())
         {
             return;
@@ -57,5 +91,13 @@ public class SeedData
             });
 
         context.SaveChanges();
+    }
+
+    public static async Task Initialize(IDbContextFactory<BlazorWebAppMoviesContext> factory, IServiceProvider serviceProvider)
+    {
+        using var context = factory.CreateDbContext();
+
+        await SeedRolesAndAdmin(serviceProvider);
+        SeedMovies(context);
     }
 }
