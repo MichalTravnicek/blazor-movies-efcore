@@ -2,8 +2,6 @@
 @rendermode InteractiveServer
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.AspNetCore.Components.QuickGrid
-@using BlazorWebAppMovies.Models
-@using BlazorWebAppMovies.Data
 @implements IAsyncDisposable
 @inject IDbContextFactory<BlazorWebAppMovies.Data.BlazorWebAppMoviesContext> DbFactory
 
@@ -15,9 +13,12 @@
     <input type="search" @bind="titleFilter" @bind:event="oninput" />
 </div>
 
-<p>
-    <a href="movies/create">Create New</a>
-</p>
+@if (authState?.User.Identity?.IsAuthenticated == true)
+{
+    <p>
+        <a href="movies/create">Create New</a>
+    </p>
+}
 
 <div>
     <QuickGrid Class="table" Items="FilteredMovies" Pagination="pagination">
@@ -28,9 +29,16 @@
         <PropertyColumn Property="movie => movie.Rating" />
 
         <TemplateColumn Context="movie">
-            <a href="@($"movies/edit?id={movie.Id}")">Edit</a> |
-            <a href="@($"movies/details?id={movie.Id}")">Details</a> |
-            <a href="@($"movies/delete?id={movie.Id}")">Delete</a>
+            @if (authState?.User.Identity?.IsAuthenticated == true)
+            {
+                <a href="@($"movies/edit?id={movie.Id}")">Edit</a> @(" | ")
+            }
+            <a href="@($"movies/details?id={movie.Id}")">Details</a>
+            @if (authState?.User.Identity?.IsAuthenticated == true)
+            {
+                @(" | ")
+                <a href="@($"movies/delete?id={movie.Id}")">Delete</a>
+            }
         </TemplateColumn>
     </QuickGrid>
 </div>
@@ -38,6 +46,10 @@
 <Paginator State="pagination" />
 
 @code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private AuthenticationState? authState;
     private BlazorWebAppMoviesContext context = default!;
     private PaginationState pagination = new PaginationState { ItemsPerPage = 5 };
     private string titleFilter = string.Empty;
@@ -45,8 +57,12 @@
     private IQueryable<Movie> FilteredMovies =>
         context.Movie.Where(m => m.Title!.Contains(titleFilter));
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        if (AuthStateTask is not null)
+        {
+            authState = await AuthStateTask;
+        }
         context = DbFactory.CreateDbContext();
     }
 

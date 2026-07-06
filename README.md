@@ -150,6 +150,43 @@ Set `"DatabaseProvider": "SqlServer"` in `appsettings.json` if it isn't already.
 
 The seed data (`SeedData.Initialize`) populates the database with sample movies on first run.
 
+## Authentication & Authorization
+
+The app uses ASP.NET Core Identity with JWT bearer tokens for authentication. On startup, `SeedData` creates two roles and an admin user:
+
+| Role | Description |
+|------|-------------|
+| `Admin` | Full access — can manage users, create/edit/delete movies |
+| `User` | Read-only access — can view movies and details |
+
+### Default admin account
+
+| Credential | Value |
+|------------|-------|
+| Email | `admin@example.com` |
+| Password | `Admin123!` |
+
+### Permission matrix
+
+| Page / Action | Unauthenticated | User role | Admin role |
+|---------------|----------------|-----------|------------|
+| Movies — View list | ✅ | ✅ | ✅ |
+| Movies — Details | ✅ | ✅ | ✅ |
+| Movies — Create | ❌ | ✅ | ✅ |
+| Movies — Edit | ❌ | ✅ | ✅ |
+| Movies — Delete | ❌ | ✅ | ✅ |
+| User Management | ❌ | ❌ | ✅ |
+
+New users can register via the API endpoint (`POST /api/auth/register`) but there is no self-service sign-up UI. User accounts must be created by an admin through the User Management page.
+
+### How authentication works
+
+1. The login form on the Home page calls the JavaScript `authService.login()` function
+2. This sends a POST request to `/api/auth/login` with email and password
+3. On success, the server returns a JWT token which is stored in a cookie (`auth_token`)
+4. The JWT middleware reads the cookie on every request and populates the `ClaimsPrincipal`
+5. The role claim (`Admin` or `User`) is embedded in the JWT and enforced by `[Authorize]` attributes on Blazor pages
+
 ## Default URLs
 
 - HTTPS: `https://localhost:7083`
