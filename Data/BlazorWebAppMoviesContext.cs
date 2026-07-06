@@ -4,7 +4,7 @@ using BlazorWebAppMovies.Models;
 
 namespace BlazorWebAppMovies.Data
 {
-    public class BlazorWebAppMoviesContext(DbContextOptions<BlazorWebAppMoviesContext> options) : IdentityDbContext<User>(options)
+    public class BlazorWebAppMoviesContext(DbContextOptions options) : IdentityDbContext<User>(options)
     {
         public DbSet<Movie> Movie { get; set; } = default!;
     }

@@ -21,11 +21,19 @@ if (databaseProvider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase))
 
     builder.Services.AddDbContextFactory<BlazorWebAppMoviesContext>(options =>
         options.UseSqlServer(sqlServerConnectionString));
+    builder.Services.AddDbContextFactory<BlazorWebAppMoviesContextSqlServer>(options =>
+        options.UseSqlServer(sqlServerConnectionString));
+    builder.Services.AddScoped(sp =>
+        sp.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>().CreateDbContext());
 }
 else
 {
     builder.Services.AddDbContextFactory<BlazorWebAppMoviesContext>(options =>
         options.UseSqlite(connectionString));
+    builder.Services.AddDbContextFactory<BlazorWebAppMoviesContextSqlite>(options =>
+        options.UseSqlite(connectionString));
+    builder.Services.AddScoped(sp =>
+        sp.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>().CreateDbContext());
 }
 
 builder.Services.AddIdentity<User, IdentityRole>()
@@ -101,12 +109,24 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
-    var factory = scope.ServiceProvider
-        .GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
-    using var context = factory.CreateDbContext();
-    context.Database.Migrate();
+    var services = scope.ServiceProvider;
 
-    SeedData.Initialize(factory);
+    if (databaseProvider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase))
+    {
+        var factory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContextSqlServer>>();
+        using var context = factory.CreateDbContext();
+        context.Database.Migrate();
+
+        SeedData.Initialize(services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>());
+    }
+    else
+    {
+        var factory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
+        using var context = factory.CreateDbContext();
+        context.Database.Migrate();
+
+        SeedData.Initialize(factory);
+    }
 }
 
 // Configure the HTTP request pipeline.

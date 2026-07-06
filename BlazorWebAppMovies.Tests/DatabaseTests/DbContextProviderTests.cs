@@ -1,5 +1,6 @@
 using BlazorWebAppMovies.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Design;
 
 namespace BlazorWebAppMovies.Tests.DatabaseTests;
 
@@ -9,10 +10,10 @@ public class DbContextProviderTests
     public void DesignTimeDbContextFactory_CreatesSqliteContext()
     {
         var factory = new DesignTimeDbContextFactory();
-        using var context = factory.CreateDbContext([]);
+        using var context = ((IDesignTimeDbContextFactory<BlazorWebAppMoviesContextSqlite>)factory).CreateDbContext([]);
 
         Assert.NotNull(context);
-        Assert.IsType<BlazorWebAppMoviesContext>(context);
+        Assert.IsType<BlazorWebAppMoviesContextSqlite>(context);
     }
 
     [Fact]
@@ -34,10 +35,10 @@ public class DbContextProviderTests
             """);
 
             var factory = new DesignTimeDbContextFactory();
-            using var context = factory.CreateDbContext([]);
+            using var context = ((IDesignTimeDbContextFactory<BlazorWebAppMoviesContextSqlServer>)factory).CreateDbContext([]);
 
             Assert.NotNull(context);
-            Assert.IsType<BlazorWebAppMoviesContext>(context);
+            Assert.IsType<BlazorWebAppMoviesContextSqlServer>(context);
         }
         finally
         {
@@ -52,7 +53,7 @@ public class DbContextProviderTests
     [Fact]
     public void SqliteContext_IsAssignableToBaseContext()
     {
-        var options = new DbContextOptionsBuilder<BlazorWebAppMoviesContext>()
+        var options = new DbContextOptionsBuilder<BlazorWebAppMoviesContextSqlite>()
             .UseSqlite("DataSource=:memory:")
             .Options;
 
@@ -63,7 +64,7 @@ public class DbContextProviderTests
     [Fact]
     public void SqlServerContext_IsAssignableToBaseContext()
     {
-        var options = new DbContextOptionsBuilder<BlazorWebAppMoviesContext>()
+        var options = new DbContextOptionsBuilder<BlazorWebAppMoviesContextSqlServer>()
             .UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=Test;Trusted_Connection=True;TrustServerCertificate=True;")
             .Options;
 
@@ -74,7 +75,7 @@ public class DbContextProviderTests
     [Fact]
     public async Task SqliteInMemoryContext_CanPerformCrud()
     {
-        var options = new DbContextOptionsBuilder<BlazorWebAppMoviesContext>()
+        var options = new DbContextOptionsBuilder<BlazorWebAppMoviesContextSqlite>()
             .UseSqlite("DataSource=:memory:")
             .Options;
 

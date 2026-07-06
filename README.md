@@ -65,6 +65,69 @@ Migrations are stored in separate subfolders based on the provider.
    ```
 4. To switch back to SQLite, set `"DatabaseProvider": "Sqlite"` in `appsettings.json`
 
+## Running with Docker (SQL Server)
+
+You can run SQL Server in a Docker container instead of using LocalDB.
+
+### Docker prerequisites
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows) or Docker Engine
+
+### Start the SQL Server container
+
+```bash
+cd docker
+
+# Copy the example environment file and adjust as needed
+cp .env.example .env
+
+# Start the SQL Server container
+docker compose up -d
+```
+
+The container will:
+- Use the SA password from `docker/.env`
+- Persist data in a named Docker volume (`sqlserver-data`)
+- Listen on port `1433` (host) → `1433` (container)
+
+To stop the container:
+
+```bash
+docker compose down
+```
+
+To stop and remove the volume (deletes all data):
+
+```bash
+docker compose down -v
+```
+
+### Update the connection string
+
+In `appsettings.json`, change `BlazorWebAppMoviesContextSqlServer` to point to the Docker container:
+
+```json
+"BlazorWebAppMoviesContextSqlServer": "Server=localhost,1433;Database=BlazorMovies;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True"
+```
+
+Make sure the password matches what you set in `docker/.env`.
+
+### Apply migrations
+
+```bash
+dotnet ef database update
+```
+
+### Run the app
+
+```bash
+dotnet run
+```
+
+Set `"DatabaseProvider": "SqlServer"` in `appsettings.json` if it isn't already.
+
+---
+
 ## Running the app
 
 ### Using SQLite (default)
@@ -76,7 +139,7 @@ Migrations are stored in separate subfolders based on the provider.
    dotnet run
    ```
 
-### Using SQL Server
+### Using SQL Server (LocalDB)
 
 1. Set `"DatabaseProvider": "SqlServer"` in `appsettings.json`
 2. Generate and apply SQL Server migrations (see above)
