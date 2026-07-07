@@ -218,9 +218,10 @@ through the User Management page.
 
 1. The login form on the Home page calls the JavaScript `authService.login()` function
 2. This sends a POST request to `/api/auth/login` with email and password
-3. On success, the server returns a JWT token which is stored in a cookie (`auth_token`)
+3. On success, the server sets an `HttpOnly` + `Secure` cookie (`auth_token`) containing the JWT — the token is never exposed to JavaScript
 4. The JWT middleware reads the cookie on every request and populates the `ClaimsPrincipal`
-5. The role claim (`Admin` or `User`) is embedded in the JWT and enforced by `[Authorize]` attributes on Blazor pages
+5. Logout calls `POST /api/auth/logout` which clears the cookie server-side
+6. The role claim (`Admin` or `User`) is embedded in the JWT and enforced by `[Authorize]` attributes on Blazor pages
 
 ## Default URLs
 

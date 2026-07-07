@@ -292,3 +292,48 @@ Desired:  Token set by server (HttpOnly: true, Secure: true)
 | `http` | `http://localhost:5216` | ❌ No — browser ignores Secure on HTTP |
 | `https` | `https://localhost:7083` | ✅ Yes |
 | Production | HTTPS | ✅ Yes — mandatory |
+
+---
+
+## ✅ Applied Fixes (2026-07-07)
+
+All four Sprint 1 items from the action plan have been implemented.
+
+| # | Issue | Fix | Files changed |
+|---|-------|-----|---------------|
+| **R1+R3** | HttpOnly + Secure cookie | Login endpoint now sets cookie via `Response.Cookies.Append()` with `HttpOnly=true, Secure=true, SameSite=Strict`. Token is never exposed to JavaScript. | `Controllers/AuthController.cs`, `wwwroot/js/auth.js` |
+| **R2** | Server-side logout | New `POST /api/auth/logout` endpoint with `[Authorize]` attribute clears the cookie server-side (`MaxAge=0`, `Expires=UnixEpoch`). JS calls it before redirecting. | `Controllers/AuthController.cs`, `wwwroot/js/auth.js` |
+| **R4** | JWT secret out of appsettings.json | `Jwt:Key` removed from `appsettings.json` (committed to git). Moved to `appsettings.Development.json` (gitignored). For production, set via environment variable or User Secrets. | `appsettings.json`, `appsettings.Development.json` |
+
+### What changed
+
+- **`AuthController.cs`** — Login no longer returns the JWT in the response body. Instead it sets an `HttpOnly` + `Secure` cookie. Added `using Microsoft.AspNetCore.Authorization` and a new `Logout` endpoint that clears the cookie server-side.
+- **`auth.js`** — `login()` no longer reads `data.token` or sets `document.cookie`; it just reloads the page. `logout()` is now `async` and calls `POST /api/auth/logout` before redirecting.
+- **`appsettings.json`** — `Jwt:Key` removed (no longer in source control).
+- **`appsettings.Development.json`** — `Jwt:Key` added for local development.
+
+### Remaining issues for future sprints
+
+| # | Issue | Severity |
+|---|-------|----------|
+| R5 | Register endpoint is open (no admin-only or email confirmation) | 🟢 LOW |
+| R6 | Login form on Home page, not a dedicated page | 🟢 LOW |
+| R7 | No rate limiting on auth endpoints | 🟢 LOW |
+
+### Files changed
+
+| File | Change | Security impact |
+|------|--------|----------------|
+| `Controllers/AuthController.cs` | **Login** now sets cookie via `Response.Cookies.Append()` with `HttpOnly=true, Secure=true, SameSite=Strict` | 🔴 **R1+R3** — token no longer readable by JS; only sent over HTTPS |
+| `Controllers/AuthController.cs` | **New `POST /api/auth/logout`** endpoint with `[Authorize]` that clears the cookie server-side | 🔴 **R2** — server-side invalidation, not just client-side cookie deletion |
+| `wwwroot/js/auth.js` | **Login** no longer reads token from response body or sets `document.cookie` — just reloads | 🔴 XSS attack surface eliminated |
+| `wwwroot/js/auth.js` | **Logout** now calls `POST /api/auth/logout` before redirecting | 🟡 token cleared server-side too |
+| `appsettings.json` | **Removed `Jwt:Key`** from shared config | 🟡 **R4** — JWT secret no longer committed to git |
+| `appsettings.Development.json` | **Added `Jwt:Key`** for local dev only | 🟡 dev keeps working, production reads from env var |
+
+### Security impact summary
+
+- **HttpOnly cookie** — even if there's an XSS vulnerability in movie data, attackers can't steal the JWT
+- **Secure flag** — cookie only sent over HTTPS (works conditionally for local HTTP dev via `location.protocol` isn't needed since it's server-controlled now)
+- **Server-side logout** — cookie is cleared with `MaxAge=0` + `Expires=UnixEpoch` at the server level
+- **JWT key moved out of `appsettings.json`** — the shared config no longer contains the secret; it's in `appsettings.Development.json` (gitignored) and should be set via environment variable or User Secrets in production
