@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace BlazorWebAppMovies.Migrations
 {
-    [DbContext(typeof(BlazorWebAppMoviesContext))]
+    [DbContext(typeof(BlazorWebAppMoviesContextSqlite))]
     [Migration("20260704204901_AddIdentity")]
     partial class AddIdentity
     {

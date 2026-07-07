@@ -4,10 +4,9 @@ using Microsoft.EntityFrameworkCore.Design;
 namespace BlazorWebAppMovies.Data;
 
 public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<BlazorWebAppMoviesContextSqlite>,
-                                          IDesignTimeDbContextFactory<BlazorWebAppMoviesContextSqlServer>,
-                                          IDesignTimeDbContextFactory<BlazorWebAppMoviesContext>
+                                          IDesignTimeDbContextFactory<BlazorWebAppMoviesContextSqlServer>
 {
-    BlazorWebAppMoviesContextSqlite IDesignTimeDbContextFactory<BlazorWebAppMoviesContextSqlite>.CreateDbContext(string[] args)
+    private static T Create<T>(string[] args) where T : BlazorWebAppMoviesContext
     {
         var configPath = args.Length > 0 ? args[0] : "appsettings.json";
         var configuration = new ConfigurationBuilder()
@@ -15,31 +14,15 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<BlazorWebA
             .AddJsonFile(configPath)
             .Build();
 
-        var connectionString = configuration.GetConnectionString("BlazorWebAppMoviesContext")
-            ?? throw new InvalidOperationException("SQLite connection string not found.");
+        var provider = DbContextProvider.Create(configuration);
         var optionsBuilder = new DbContextOptionsBuilder<BlazorWebAppMoviesContext>();
-        optionsBuilder.UseSqlite(connectionString);
-        return new BlazorWebAppMoviesContextSqlite(optionsBuilder.Options);
+        provider.ConfigureDbContext(optionsBuilder);
+        return (T)Activator.CreateInstance(typeof(T), optionsBuilder.Options)!;
     }
+
+    BlazorWebAppMoviesContextSqlite IDesignTimeDbContextFactory<BlazorWebAppMoviesContextSqlite>.CreateDbContext(string[] args)
+        => Create<BlazorWebAppMoviesContextSqlite>(args);
 
     BlazorWebAppMoviesContextSqlServer IDesignTimeDbContextFactory<BlazorWebAppMoviesContextSqlServer>.CreateDbContext(string[] args)
-    {
-        var configPath = args.Length > 0 ? args[0] : "appsettings.json";
-        var configuration = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
-            .AddJsonFile(configPath)
-            .Build();
-
-        var connectionString = configuration.GetConnectionString("BlazorWebAppMoviesContextSqlServer")
-            ?? throw new InvalidOperationException("SQL Server connection string not found.");
-        var optionsBuilder = new DbContextOptionsBuilder<BlazorWebAppMoviesContext>();
-        optionsBuilder.UseSqlServer(connectionString);
-        return new BlazorWebAppMoviesContextSqlServer(optionsBuilder.Options);
-    }
-
-    // Keep the original factory for backward compatibility
-    BlazorWebAppMoviesContext IDesignTimeDbContextFactory<BlazorWebAppMoviesContext>.CreateDbContext(string[] args)
-    {
-        return ((IDesignTimeDbContextFactory<BlazorWebAppMoviesContextSqlite>)this).CreateDbContext(args);
-    }
+        => Create<BlazorWebAppMoviesContextSqlServer>(args);
 }

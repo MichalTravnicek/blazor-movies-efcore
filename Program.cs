@@ -10,26 +10,11 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var connectionString = builder.Configuration.GetConnectionString("BlazorWebAppMoviesContext")
-                       ?? throw new InvalidOperationException("Connection string 'BlazorWebAppMoviesContext' not found.");
-var databaseProvider = builder.Configuration["DatabaseProvider"] ?? "Sqlite";
+var dbProvider = DbContextProvider.Create(builder.Configuration);
 
-if (databaseProvider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase))
-{
-    var sqlServerConnectionString = builder.Configuration.GetConnectionString("BlazorWebAppMoviesContextSqlServer")
-                                    ?? throw new InvalidOperationException("Connection string 'BlazorWebAppMoviesContextSqlServer' not found.");
-
-    Action<DbContextOptionsBuilder> setupSqlServer = options =>
-        options.UseSqlServer(sqlServerConnectionString);
-
-    builder.Services.AddDbContextFactory<BlazorWebAppMoviesContext>(setupSqlServer);
-    builder.Services.AddDbContextFactory<BlazorWebAppMoviesContextSqlServer>(setupSqlServer);
-}
-else
-{
-    builder.Services.AddDbContextFactory<BlazorWebAppMoviesContext>(options =>
-        options.UseSqlite(connectionString));
-}
+// Register the base factory (for Identity/seed) and the concrete factory (for migrations)
+builder.Services.AddDbContextFactory<BlazorWebAppMoviesContext>(dbProvider.ConfigureDbContext);
+dbProvider.RegisterConcreteFactory(builder.Services);
 
 builder.Services.AddIdentity<User, IdentityRole>()
     .AddEntityFrameworkStores<BlazorWebAppMoviesContext>()
@@ -126,17 +111,8 @@ if (app.Environment.IsDevelopment())
         var services = scope.ServiceProvider;
         var baseFactory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
 
-        if (databaseProvider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase))
-        {
-            var sqlServerFactory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContextSqlServer>>();
-            using var sqlServerContext = sqlServerFactory.CreateDbContext();
-            sqlServerContext.Database.Migrate();
-        }
-        else
-        {
-            using var context = baseFactory.CreateDbContext();
-            context.Database.Migrate();
-        }
+        using var migrationContext = dbProvider.CreateMigrationContext(services);
+        migrationContext.Database.Migrate();
 
         SeedData.Initialize(baseFactory, services).GetAwaiter().GetResult();
     }

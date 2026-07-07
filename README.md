@@ -13,43 +13,71 @@ Switch between them by changing the `DatabaseProvider` setting in `appsettings.j
 - For SQL Server: [SQL Server LocalDB](https://learn.microsoft.com/sql/database-engine/configure-windows/sql-server-express-localdb) (included with Visual Studio)
 - `dotnet-ef` tool (restored automatically via `.config/dotnet-tools.json`)
 
+## Architecture
+
+Each database provider has its own `DbContext` subclass so that EF Core can
+maintain separate migration histories:
+
+| Provider   | DbContext                         | Migration folder       |
+|------------|-----------------------------------|------------------------|
+| SQLite     | `BlazorWebAppMoviesContextSqlite` | `Migrations/Sqlite/`   |
+| SQL Server | `BlazorWebAppMoviesContextSqlServer` | `Migrations/SqlServer/` |
+
+At startup, `DbContextProvider.Create()` reads `DatabaseProvider` from config,
+registers the base class factory for Identity/seed data, and the concrete
+subclass factory so that `Migrate()` finds the correct migration chain.
+
 ## Configuration
 
 The database provider is controlled by the `DatabaseProvider` key in `appsettings.json`:
+
+```json
+"DatabaseProvider": "Sqlite"      // Uses SQLite (default)
+"DatabaseProvider": "SqlServer"   // Uses SQL Server
 ```
-"DatabaseProvider": "Sqlite" // Uses SQLite (default) "DatabaseProvider": "SqlServer" // Uses SQL Server LocalDB
+
+The app has two connection strings, one per provider:
+
+| Connection String | Purpose                                                                     |
+|---|-----------------------------------------------------------------------------|
+| `BlazorWebAppMoviesContextSqlite` | SQLite: `Data Source=BlazorWebAppMovies.db`                                 |
+| `BlazorWebAppMoviesContextSqlServer` | SQL Server LocalDB (`(localdb)\\MSSQLLocalDB`) or Docker (`localhost,1433`) |
+
+The default `appsettings.json` SQL Server LocalDB connection string:
+
+```json
+    "BlazorWebAppMoviesContextSqlServer": "Server=(localdb)\\mssqllocaldb;Database=BlazorWebAppMovies;Trusted_Connection=True;MultipleActiveResultSets=true"
 ```
+If you want SQL Server in Docker, use this connection string:
 
-The app includes two connection strings:
-
-| Connection String | Purpose |
-|---|---|
-| `BlazorWebAppMoviesContext` | SQLite: `Data Source=BlazorWebAppMovies.db` |
-| `BlazorWebAppMoviesContextSqlServer` | SQL Server LocalDB |
-
+```json
+"BlazorWebAppMoviesContextSqlServer": "Server=localhost,1433;Database=BlazorMovies;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True"
+```
 ---
 
 ## Restore the EF Core tool
 
 Before running any migration commands, restore the `dotnet-ef` tool:
+
 ```
 dotnet tool restore
 ```
 
 ## Creating and applying migrations
 
-Migrations are stored in separate subfolders based on the provider.
+Migrations are stored in separate subfolders based on the provider. Each must
+be generated with the correct `--context` flag.
 
 ### SQLite migrations
 
 1. Ensure `"DatabaseProvider": "Sqlite"` in `appsettings.json`
 2. Generate:
    ```
-   dotnet ef migrations add InitialCreate --output-dir Migrations\Sqlite
+   dotnet ef migrations add InitialCreate --context BlazorWebAppMoviesContextSqlite --output-dir Migrations\Sqlite
    ```
 3. Apply:
    ```
-   dotnet ef database update
+   dotnet ef database update --context BlazorWebAppMoviesContextSqlite
    ```
 
 ### SQL Server migrations
@@ -57,13 +85,16 @@ Migrations are stored in separate subfolders based on the provider.
 1. Set `"DatabaseProvider": "SqlServer"` in `appsettings.json`
 2. Generate:
    ```
-   dotnet ef migrations add InitialCreate --output-dir Migrations\SqlServer
+   dotnet ef migrations add InitialCreate --context BlazorWebAppMoviesContextSqlServer --output-dir Migrations\SqlServer
    ```
 3. Apply:
    ```
-   dotnet ef database update
+   dotnet ef database update --context BlazorWebAppMoviesContextSqlServer
    ```
-4. To switch back to SQLite, set `"DatabaseProvider": "Sqlite"` in `appsettings.json`
+
+> **Note:** The `--context` flag is required because EF Core needs to know which
+> concrete DbContext subclass the migration belongs to. The base class
+> `BlazorWebAppMoviesContext` is shared by both providers.
 
 ## Running with Docker (SQL Server)
 
@@ -115,7 +146,7 @@ Make sure the password matches what you set in `docker/.env`.
 ### Apply migrations
 
 ```bash
-dotnet ef database update
+dotnet ef database update --context BlazorWebAppMoviesContextSqlServer
 ```
 
 ### Run the app
@@ -148,11 +179,13 @@ Set `"DatabaseProvider": "SqlServer"` in `appsettings.json` if it isn't already.
    dotnet run
    ```
 
-The seed data (`SeedData.Initialize`) populates the database with sample movies on first run.
+The seed data (`SeedData.Initialize`) populates the database with sample movies
+and the default admin user on first run.
 
 ## Authentication & Authorization
 
-The app uses ASP.NET Core Identity with JWT bearer tokens for authentication. On startup, `SeedData` creates two roles and an admin user:
+The app uses ASP.NET Core Identity with JWT bearer tokens for authentication.
+On startup, `SeedData` creates two roles and an admin user:
 
 | Role | Description |
 |------|-------------|
@@ -169,7 +202,7 @@ The app uses ASP.NET Core Identity with JWT bearer tokens for authentication. On
 ### Permission matrix
 
 | Page / Action | Unauthenticated | User role | Admin role |
-|---------------|----------------|-----------|------------|
+|---|---|---|---|
 | Movies — View list | ✅ | ✅ | ✅ |
 | Movies — Details | ✅ | ✅ | ✅ |
 | Movies — Create | ❌ | ✅ | ✅ |
@@ -177,7 +210,9 @@ The app uses ASP.NET Core Identity with JWT bearer tokens for authentication. On
 | Movies — Delete | ❌ | ✅ | ✅ |
 | User Management | ❌ | ❌ | ✅ |
 
-New users can register via the API endpoint (`POST /api/auth/register`) but there is no self-service sign-up UI. User accounts must be created by an admin through the User Management page.
+New users can register via the API endpoint (`POST /api/auth/register`) but
+there is no self-service sign-up UI. User accounts must be created by an admin
+through the User Management page.
 
 ### How authentication works
 
@@ -200,9 +235,18 @@ You can change these in `Properties/launchSettings.json`.
 
 Delete the `BlazorWebAppMovies.db` file from the project folder.
 
-### SQL Server
+### SQL Server (LocalDB)
 
 1. Open **SQL Server Object Explorer** (View > SQL Server Object Explorer)
 2. Navigate to `SQL Server` > `(localdb)\MSSQLLocalDB` > `Databases`
 3. Right-click `BlazorWebAppMovies` and select **Delete**
 4. Check **Close existing connections** and select **OK**
+
+### SQL Server (Docker)
+
+```bash
+cd docker
+docker compose down -v
+```
+
+This stops the container and removes the volume, deleting all data.
