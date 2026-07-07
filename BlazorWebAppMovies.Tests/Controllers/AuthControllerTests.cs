@@ -27,6 +27,7 @@ public class AuthControllerTests : IDisposable
     private readonly UserManager<User> _userManager;
     private readonly AuthController _controller;
     private readonly IServiceScope _scope;
+    private readonly DefaultHttpContext _httpContext;
 
     public AuthControllerTests()
     {
@@ -65,6 +66,13 @@ public class AuthControllerTests : IDisposable
             _userManager,
             signInManager,
             configuration);
+
+        // Set up HttpContext so Response.Cookies.Append works
+        _httpContext = new DefaultHttpContext();
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = _httpContext
+        };
     }
 
     public void Dispose()
@@ -92,7 +100,23 @@ public class AuthControllerTests : IDisposable
             userConfirmation);
     }
 
-    private static JwtSecurityToken DecodeToken(string token)
+    private string? ExtractTokenFromCookie()
+        {
+            if (_httpContext.Response.Headers.TryGetValue("Set-Cookie", out var setCookie))
+            {
+                foreach (var cookie in setCookie)
+                {
+                    if (cookie != null && cookie.StartsWith("auth_token="))
+                    {
+                        var parts = cookie.Split(';')[0];
+                        return parts["auth_token=".Length..];
+                    }
+                }
+            }
+            return null;
+        }
+
+        private static JwtSecurityToken DecodeToken(string token)
     {
         var handler = new JwtSecurityTokenHandler();
         var key = Encoding.UTF8.GetBytes(StaticJwtKey);
@@ -200,11 +224,9 @@ public class AuthControllerTests : IDisposable
         var result = await _controller.Login(request);
 
         var okResult = Assert.IsType<OkObjectResult>(result);
-        var response = okResult.Value;
+        Assert.Equal(200, okResult.StatusCode);
 
-        var tokenProperty = response?.GetType().GetProperty("Token");
-        Assert.NotNull(tokenProperty);
-        var token = tokenProperty.GetValue(response) as string;
+        var token = ExtractTokenFromCookie();
         Assert.NotNull(token);
         Assert.NotEmpty(token);
     }
@@ -226,7 +248,7 @@ public class AuthControllerTests : IDisposable
 
         var result = await _controller.Login(request);
         var okResult = Assert.IsType<OkObjectResult>(result);
-        var token = okResult.Value?.GetType().GetProperty("Token")?.GetValue(okResult.Value) as string;
+        var token = ExtractTokenFromCookie();
 
         Assert.NotNull(token);
 
@@ -251,7 +273,7 @@ public class AuthControllerTests : IDisposable
         var request = new AuthController.LoginRequest(email, password);
         var result = await _controller.Login(request);
         var okResult = Assert.IsType<OkObjectResult>(result);
-        var token = okResult.Value?.GetType().GetProperty("Token")?.GetValue(okResult.Value) as string;
+        var token = ExtractTokenFromCookie();
 
         Assert.NotNull(token);
         var jwt = DecodeToken(token);
@@ -306,7 +328,7 @@ public class AuthControllerTests : IDisposable
         var request = new AuthController.LoginRequest(email, password);
         var result = await _controller.Login(request);
         var okResult = Assert.IsType<OkObjectResult>(result);
-        var token = okResult.Value?.GetType().GetProperty("Token")?.GetValue(okResult.Value) as string;
+        var token = ExtractTokenFromCookie();
 
         Assert.NotNull(token);
         var jwt = DecodeToken(token);
@@ -322,5 +344,57 @@ public class AuthControllerTests : IDisposable
         var diff = expTime - now;
         Assert.True(diff is { Hours: >= 23 } and { Hours: <= 25 },
             $"Expected ~24h expiry but got {diff.TotalHours:F1}h");
+    }
+
+    // ── Logout tests ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Logout_ReturnsOk()
+    {
+        var email = "logout-test@example.com";
+        var password = "LogoutT3st!";
+
+        await _userManager.CreateAsync(new User
+        {
+            UserName = email,
+            Email = email,
+            Name = "Logout Test"
+        }, password);
+
+        // First login to populate the cookie
+        var loginRequest = new AuthController.LoginRequest(email, password);
+        await _controller.Login(loginRequest);
+
+        var result = _controller.Logout();
+
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        Assert.Equal(200, okResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task Logout_ClearsAuthCookie()
+    {
+        var email = "logout-cookie@example.com";
+        var password = "C00kie!Cl3ar";
+
+        await _userManager.CreateAsync(new User
+        {
+            UserName = email,
+            Email = email,
+            Name = "Logout Cookie"
+        }, password);
+
+        // First login to populate the cookie
+        var loginRequest = new AuthController.LoginRequest(email, password);
+        await _controller.Login(loginRequest);
+
+        _controller.Logout();
+
+        var setCookie = _httpContext.Response.Headers["Set-Cookie"];
+        // Find the last auth_token cookie (the one set by Logout, which overrides the login one)
+        var authCookies = setCookie.Where(c => c != null && c.StartsWith("auth_token=", StringComparison.OrdinalIgnoreCase)).ToList();
+        Assert.NotEmpty(authCookies);
+        var lastAuthCookie = authCookies.Last()!;
+        Assert.Contains("max-age=0", lastAuthCookie, StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
@@ -28,6 +29,23 @@ public class AuthController : ControllerBase
 
     public record RegisterRequest(string Name, string Email, string Password);
     public record LoginRequest(string Email, string Password);
+
+    [HttpPost("logout")]
+    [Authorize]
+    public IActionResult Logout()
+    {
+        // Clear the HttpOnly cookie server-side to invalidate the session
+        Response.Cookies.Append("auth_token", "", new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
+            MaxAge = TimeSpan.Zero,
+            Expires = DateTimeOffset.UnixEpoch
+        });
+
+        return Ok(new { Message = "Logged out successfully" });
+    }
 
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
@@ -68,7 +86,16 @@ public class AuthController : ControllerBase
 
         var token = await GenerateJwtToken(user);
 
-        return Ok(new { Token = token });
+        // 🔒 Set cookie server-side with HttpOnly + Secure
+        Response.Cookies.Append("auth_token", token, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
+            MaxAge = TimeSpan.FromHours(24)
+        });
+
+        return Ok(new { Message = "Login successful" });
     }
 
     private async Task<string> GenerateJwtToken(User user)

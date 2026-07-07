@@ -16,11 +16,8 @@ window.authService = {
           message: errorData.message || "Invalid credentials",
         };
       }
-      const data = await response.json();
-      console.log("[auth] Token received, setting cookie");
-      document.cookie =
-        "auth_token=" + data.token + "; path=/; max-age=86400; samesite=strict";
-      console.log("[auth] Cookie set, reloading");
+      // Cookie set by server with HttpOnly + Secure — just reload
+      console.log("[auth] Login successful, cookie set by server, reloading");
       window.location.href = "/";
       return { success: true };
     } catch (error) {
@@ -28,9 +25,13 @@ window.authService = {
       return { success: false, message: "Connection error: " + error.message };
     }
   },
-  logout: function () {
-    console.log("[auth] Logging out, clearing cookie");
-    document.cookie = "auth_token=; path=/; max-age=0; samesite=strict";
+  logout: async function () {
+    console.log("[auth] Logging out");
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch (e) {
+      console.warn("[auth] Logout request failed, continuing anyway", e);
+    }
     window.location.href = "/";
   },
 };
