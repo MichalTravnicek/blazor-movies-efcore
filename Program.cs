@@ -5,7 +5,10 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using BlazorWebAppMovies.Data;
+using AutoMapper;
 using BlazorWebAppMovies.Models;
+using BlazorWebAppMovies.Models.Mapping;
+using BlazorWebAppMovies;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -89,11 +92,25 @@ builder.Services.AddSwaggerGen(options =>
                     Type = ReferenceType.SecurityScheme,
                     Id = "Bearer"
                 }
-            },
-            []
+            },[]
         }
     });
+
+    // Use meaningful examples instead of Swagger's random generation
+    options.SchemaFilter<SwaggerExampleFilter>();
+
+    // Describe how to get JWT from login for Swagger Authorize
+    options.OperationFilter<SwaggerLoginDescriptionFilter>();
+
 });
+builder.Services.AddSingleton(sp =>
+{
+    var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+    var config = new MapperConfiguration(cfg => cfg.AddProfile<MovieProfile>(), loggerFactory);
+    config.AssertConfigurationIsValid();
+    return config.CreateMapper();
+});
+
 builder.Services.AddQuickGridEntityFrameworkAdapter();
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();

@@ -254,3 +254,43 @@ docker compose down -v
 ```
 
 This stops the container and removes the volume, deleting all data.
+
+---
+
+## Movies API
+
+The app exposes a RESTful JSON API for managing movies using **AutoMapper** for entity-to-DTO mapping.
+
+### Endpoints
+
+| Method | Route | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/movies` | Public | List all movies (ordered by release date) |
+| `GET` | `/api/movies/{id}` | Public | Get a single movie by ID |
+| `POST` | `/api/movies` | Required | Create a new movie |
+| `PUT` | `/api/movies/{id}` | Required | Update an existing movie |
+| `DELETE` | `/api/movies/{id}` | Required | Delete a movie |
+
+### DTOs
+
+| DTO | Direction | Purpose |
+|---|---|---|
+| `MovieDto` | Output | Full movie data including Id |
+| `CreateMovieDto` | Input | Create a movie (validated) |
+| `UpdateMovieDto` | Input | Update a movie (validated) |
+
+All input DTOs carry the same validation rules as the `Movie` entity — title (3-60 chars, no whitespace-only), genre (uppercase-starting), rating (G/PG/PG-13/R/NC-17), and price (0-100).
+
+### AutoMapper
+
+The `MovieProfile` class in `Models/Mapping/` defines three mappings:
+
+- `Movie → MovieDto` — all properties, including Id
+- `CreateMovieDto → Movie` — Id is ignored (DB-generated)
+- `UpdateMovieDto → Movie` — Id is ignored (preserved from existing entity)
+
+AutoMapper is registered as a singleton in `Program.cs` with `AssertConfigurationIsValid()` at startup.
+
+### Swagger
+
+The API is documented via Swagger UI at `/swagger` (development-only). JWT bearer authentication is configured in Swagger — click the **Authorize** button and enter your JWT token to test protected endpoints.

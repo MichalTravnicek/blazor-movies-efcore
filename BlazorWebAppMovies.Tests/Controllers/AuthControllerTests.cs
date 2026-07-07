@@ -207,6 +207,83 @@ public class AuthControllerTests : IDisposable
     // ── Login tests ───────────────────────────────────────────────
 
     [Fact]
+    public async Task Register_WithEmptyEmail_ReturnsBadRequest()
+    {
+        var request = new AuthController.RegisterRequest(
+            "No Email", "", "P@ssw0rd!");
+
+        var result = await _controller.Register(request);
+
+        // Identity validates email format internally
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task Login_WithEmptyEmail_ReturnsUnauthorized()
+    {
+        var request = new AuthController.LoginRequest("", "AnyPass1!");
+
+        var result = await _controller.Login(request);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task Login_WithEmptyPassword_ReturnsUnauthorized()
+    {
+        var email = "empty-pw@example.com";
+
+        await _userManager.CreateAsync(new User
+        {
+            UserName = email,
+            Email = email,
+            Name = "Empty PW"
+        }, "ValidP@ss1");
+
+        var request = new AuthController.LoginRequest(email, "");
+
+        var result = await _controller.Login(request);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task Login_WithValidCredentials_DoesNotReturnTokenInBody()
+    {
+        var email = "no-token-body@example.com";
+        var password = "N0T0ken!Body";
+
+        await _userManager.CreateAsync(new User
+        {
+            UserName = email,
+            Email = email,
+            Name = "No Token Body"
+        }, password);
+
+        var request = new AuthController.LoginRequest(email, password);
+
+        var result = await _controller.Login(request);
+
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        Assert.Equal(200, okResult.StatusCode);
+
+        // Verify token is only in the cookie, NOT in the response body
+        var json = System.Text.Json.JsonSerializer.Serialize(okResult.Value);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        Assert.False(doc.RootElement.TryGetProperty("token", out _),
+            "Login response body must NOT contain a token property — token is HttpOnly cookie only.");
+
+        // But the Message should be there (capital M — C# anonymous type preserves casing)
+        Assert.True(doc.RootElement.TryGetProperty("Message", out var msgProp));
+        Assert.Equal("Login successful", msgProp.GetString());
+
+        // Token should still be in the cookie
+        var token = ExtractTokenFromCookie();
+        Assert.NotNull(token);
+        Assert.NotEmpty(token);
+    }
+
+    [Fact]
     public async Task Login_WithValidCredentials_ReturnsOkWithToken()
     {
         var email = "login-test@example.com";

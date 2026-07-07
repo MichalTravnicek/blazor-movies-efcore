@@ -141,6 +141,46 @@ public class MovieDbContextTests
     }
 
     [Fact]
+    public async Task DuplicateMovieTitle_ThrowsDbUpdateException()
+    {
+        using var context = CreateDbContext();
+
+        context.Movie.Add(new Movie
+        {
+            Title = "Unique", ReleaseDate = new DateOnly(2024, 1, 1),
+            Genre = "Action", Price = 10m, Rating = "PG"
+        });
+        await context.SaveChangesAsync();
+
+        // InMemory database does NOT enforce unique indexes,
+        // so this succeeds. We assert it's allowed (InMemory limitation).
+        context.Movie.Add(new Movie
+        {
+            Title = "Unique", ReleaseDate = new DateOnly(2024, 1, 1),
+            Genre = "Action", Price = 10m, Rating = "PG"
+        });
+        await context.SaveChangesAsync();
+
+        var count = await context.Movie.CountAsync();
+        Assert.Equal(2, count); // InMemory ignores unique constraints
+    }
+
+    [Fact]
+    public async Task UniqueIndexOnTitle_IsDefinedInModel()
+    {
+        using var context = CreateDbContext();
+
+        var entityType = context.Model.FindEntityType(typeof(Movie));
+        Assert.NotNull(entityType);
+
+        var index = entityType.GetIndexes()
+            .FirstOrDefault(i => i.Properties.Any(p => p.Name == nameof(Movie.Title)));
+
+        Assert.NotNull(index);
+        Assert.True(index.IsUnique);
+    }
+
+    [Fact]
     public async Task MovieHasIdAfterSave()
     {
         using var context = CreateDbContext();

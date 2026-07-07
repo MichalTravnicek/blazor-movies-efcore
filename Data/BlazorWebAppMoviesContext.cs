@@ -7,4 +7,13 @@ namespace BlazorWebAppMovies.Data;
 public class BlazorWebAppMoviesContext(DbContextOptions<BlazorWebAppMoviesContext> options) : IdentityDbContext<User>(options)
 {
     public DbSet<Movie> Movie { get; set; } = default!;
+
+    protected override void OnModelCreating(ModelBuilder builder)
+    {
+        base.OnModelCreating(builder);
+
+        builder.Entity<Movie>()
+            .HasIndex(m => m.Title)
+            .IsUnique();
+    }
 }
