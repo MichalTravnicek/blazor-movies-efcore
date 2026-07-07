@@ -9,6 +9,8 @@ using AutoMapper;
 using BlazorWebAppMovies.Models;
 using BlazorWebAppMovies.Models.Mapping;
 using BlazorWebAppMovies;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -121,19 +123,32 @@ builder.Services.AddRazorComponents()
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+
+using (var scope = app.Services.CreateScope())
 {
-    using (var scope = app.Services.CreateScope())
+    var services = scope.ServiceProvider;
+    var baseFactory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
+
+    using var migrationContext = dbProvider.CreateMigrationContext(services);
+    // Check for pending model changes
+    var migrator = migrationContext.Database.GetService<IMigrator>();
+    if (migrator.HasPendingModelChanges())
     {
-        var services = scope.ServiceProvider;
-        var baseFactory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
+        Console.WriteLine("");
+        Console.WriteLine("⚠️  ╔══════════════════════════════════════════════════╗");
+        Console.WriteLine("⚠️  ║  Model has pending changes!                      ║");
+        Console.WriteLine("⚠️  ║  Run: dotnet ef migrations add <description>     ║");
+        Console.WriteLine("⚠️  ╚══════════════════════════════════════════════════╝");
+        Console.WriteLine("");
+    }
+    migrationContext.Database.Migrate();
 
-        using var migrationContext = dbProvider.CreateMigrationContext(services);
-        migrationContext.Database.Migrate();
-
+    if (app.Environment.IsDevelopment())
+    {
         SeedData.Initialize(baseFactory, services).GetAwaiter().GetResult();
     }
 }
+
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
