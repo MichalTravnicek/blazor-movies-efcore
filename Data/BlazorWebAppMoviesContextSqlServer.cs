@@ -1,9 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace BlazorWebAppMovies.Data
+namespace BlazorWebAppMovies.Data;
+
+public class BlazorWebAppMoviesContextSqlServer(DbContextOptions<BlazorWebAppMoviesContext> options)
+    : BlazorWebAppMoviesContext(options)
 {
-    public class BlazorWebAppMoviesContextSqlServer(DbContextOptions<BlazorWebAppMoviesContextSqlServer> options)
-        : BlazorWebAppMoviesContext(options)
-    {
-    }
 }

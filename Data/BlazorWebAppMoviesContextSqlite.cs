@@ -1,9 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace BlazorWebAppMovies.Data
+namespace BlazorWebAppMovies.Data;
+
+public class BlazorWebAppMoviesContextSqlite(DbContextOptions<BlazorWebAppMoviesContext> options)
+    : BlazorWebAppMoviesContext(options)
 {
-    public class BlazorWebAppMoviesContextSqlite(DbContextOptions<BlazorWebAppMoviesContextSqlite> options)
-        : BlazorWebAppMoviesContext(options)
-    {
-    }
 }

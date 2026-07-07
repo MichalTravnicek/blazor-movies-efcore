@@ -223,7 +223,6 @@ public class AuthControllerTests : IDisposable
         }, password);
 
         var request = new AuthController.LoginRequest(email, password);
-        await _controller.Login(request);
 
         var result = await _controller.Login(request);
         var okResult = Assert.IsType<OkObjectResult>(result);

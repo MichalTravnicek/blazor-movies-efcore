@@ -19,21 +19,16 @@ if (databaseProvider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase))
     var sqlServerConnectionString = builder.Configuration.GetConnectionString("BlazorWebAppMoviesContextSqlServer")
                                     ?? throw new InvalidOperationException("Connection string 'BlazorWebAppMoviesContextSqlServer' not found.");
 
-    builder.Services.AddDbContextFactory<BlazorWebAppMoviesContext>(options =>
-        options.UseSqlServer(sqlServerConnectionString));
-    builder.Services.AddDbContextFactory<BlazorWebAppMoviesContextSqlServer>(options =>
-        options.UseSqlServer(sqlServerConnectionString));
-    builder.Services.AddScoped(sp =>
-        sp.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>().CreateDbContext());
+    Action<DbContextOptionsBuilder> setupSqlServer = options =>
+        options.UseSqlServer(sqlServerConnectionString);
+
+    builder.Services.AddDbContextFactory<BlazorWebAppMoviesContext>(setupSqlServer);
+    builder.Services.AddDbContextFactory<BlazorWebAppMoviesContextSqlServer>(setupSqlServer);
 }
 else
 {
     builder.Services.AddDbContextFactory<BlazorWebAppMoviesContext>(options =>
         options.UseSqlite(connectionString));
-    builder.Services.AddDbContextFactory<BlazorWebAppMoviesContextSqlite>(options =>
-        options.UseSqlite(connectionString));
-    builder.Services.AddScoped(sp =>
-        sp.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>().CreateDbContext());
 }
 
 builder.Services.AddIdentity<User, IdentityRole>()
@@ -124,25 +119,26 @@ builder.Services.AddRazorComponents()
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
+if (app.Environment.IsDevelopment())
 {
-    var services = scope.ServiceProvider;
-
-    if (databaseProvider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase))
+    using (var scope = app.Services.CreateScope())
     {
-        var factory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContextSqlServer>>();
-        using var context = factory.CreateDbContext();
-        context.Database.Migrate();
+        var services = scope.ServiceProvider;
+        var baseFactory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
 
-        SeedData.Initialize(services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>(), services).GetAwaiter().GetResult();
-    }
-    else
-    {
-        var factory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
-        using var context = factory.CreateDbContext();
-        context.Database.Migrate();
+        if (databaseProvider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase))
+        {
+            var sqlServerFactory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContextSqlServer>>();
+            using var sqlServerContext = sqlServerFactory.CreateDbContext();
+            sqlServerContext.Database.Migrate();
+        }
+        else
+        {
+            using var context = baseFactory.CreateDbContext();
+            context.Database.Migrate();
+        }
 
-        SeedData.Initialize(factory, services).GetAwaiter().GetResult();
+        SeedData.Initialize(baseFactory, services).GetAwaiter().GetResult();
     }
 }
 
@@ -151,13 +147,13 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
     app.UseHsts();
-    app.UseMigrationsEndPoint();
 }
 
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+    app.UseMigrationsEndPoint();
 }
 
 app.UseHttpsRedirection();

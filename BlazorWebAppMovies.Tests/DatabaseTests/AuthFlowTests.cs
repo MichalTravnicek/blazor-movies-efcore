@@ -36,7 +36,7 @@ public class AuthFlowTests
     [Fact]
     public async Task SeedData_CreatesAdminRole()
     {
-        var (services, userManager, roleManager) = CreateAuthServices();
+        var (services, _, roleManager) = CreateAuthServices();
         var factory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
 
         await SeedData.Initialize(factory, services);
@@ -47,7 +47,7 @@ public class AuthFlowTests
     [Fact]
     public async Task SeedData_CreatesUserRole()
     {
-        var (services, userManager, roleManager) = CreateAuthServices();
+        var (services, _, roleManager) = CreateAuthServices();
         var factory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
 
         await SeedData.Initialize(factory, services);
@@ -58,7 +58,7 @@ public class AuthFlowTests
     [Fact]
     public async Task SeedData_CreatesAdminUser()
     {
-        var (services, userManager, roleManager) = CreateAuthServices();
+        var (services, userManager, _) = CreateAuthServices();
         var factory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
 
         await SeedData.Initialize(factory, services);
@@ -71,7 +71,7 @@ public class AuthFlowTests
     [Fact]
     public async Task SeedData_AdminUserHasAdminRole()
     {
-        var (services, userManager, roleManager) = CreateAuthServices();
+        var (services, userManager, _) = CreateAuthServices();
         var factory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
 
         await SeedData.Initialize(factory, services);
@@ -86,7 +86,7 @@ public class AuthFlowTests
     [Fact]
     public async Task SeedData_AdminUserCanSignIn()
     {
-        var (services, userManager, roleManager) = CreateAuthServices();
+        var (services, userManager, _) = CreateAuthServices();
         var factory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
 
         await SeedData.Initialize(factory, services);
@@ -104,7 +104,7 @@ public class AuthFlowTests
     [Fact]
     public async Task SeedData_DoesNotDuplicateAdminOnSecondRun()
     {
-        var (services, userManager, roleManager) = CreateAuthServices();
+        var (services, userManager, _) = CreateAuthServices();
         var factory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
 
         await SeedData.Initialize(factory, services);
@@ -173,7 +173,7 @@ public class AuthFlowTests
     [Fact]
     public async Task AdminUser_HasAdminRole()
     {
-        var (services, userManager, roleManager) = CreateAuthServices();
+        var (services, userManager, _) = CreateAuthServices();
         var factory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
 
         await SeedData.Initialize(factory, services);
@@ -188,7 +188,7 @@ public class AuthFlowTests
     [Fact]
     public async Task RegularUser_DoesNotHaveAdminRole()
     {
-        var (services, userManager, roleManager) = CreateAuthServices();
+        var (services, userManager, _) = CreateAuthServices();
         var factory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
 
         await SeedData.Initialize(factory, services);
