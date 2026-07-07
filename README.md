@@ -1,8 +1,11 @@
-# Blazor Web App Movies tutorial sample app
+# Blazor Web App Movies sample app
 
-This sample app is the completed app for the Blazor Web App Movies tutorial:
+[![.NET](https://github.com/MichalTravnicek/blazor-movies-efcore/actions/workflows/dotnet.yml/badge.svg)](https://github.com/MichalTravnicek/blazor-movies-efcore/actions/workflows/dotnet.yml)
 
-[Build a Blazor movie database app (Overview)](https://learn.microsoft.com/aspnet/core/blazor/tutorials/movie-database-app/)
+This sample app is showcasing .NET Framework with Blazor UI and EF Core ORM + migrations for SQL Server and SQLite:
+
+
+Based on [Build a Blazor movie database app (Overview)](https://learn.microsoft.com/aspnet/core/blazor/tutorials/movie-database-app/)
 
 The app supports both **SQLite** (default) and **SQL Server** databases.  
 Switch between them by changing the `DatabaseProvider` setting in `appsettings.json`.
@@ -46,7 +49,7 @@ The app has two connection strings, one per provider:
 The default `appsettings.json` SQL Server LocalDB connection string:
 
 ```json
-    "BlazorWebAppMoviesContextSqlServer": "Server=(localdb)\\mssqllocaldb;Database=BlazorWebAppMovies;Trusted_Connection=True;MultipleActiveResultSets=true"
+"BlazorWebAppMoviesContextSqlServer": "Server=(localdb)\\mssqllocaldb;Database=BlazorWebAppMovies;Trusted_Connection=True;MultipleActiveResultSets=true"
 ```
 If you want SQL Server in Docker, use this connection string:
 
