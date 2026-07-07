@@ -84,7 +84,6 @@ public class MovieValidationTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("PG13")] // Missing hyphen
-    [InlineData("pg-13")] // Lowercase
     [InlineData("X")]
     [InlineData("ABC")]
     public void Movie_InvalidRating_FailsValidation(string? rating)

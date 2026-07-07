@@ -1,0 +1,306 @@
+@page "/usermanagement"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Admin")]
+@inject UserManager<User> UserManager
+@inject NavigationManager Navigation
+
+<PageTitle>User Management</PageTitle>
+
+<h1>User Management</h1>
+
+@if (isLoading)
+{
+    <div class="d-flex justify-content-center mt-5">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <p class="text-muted mb-0">Manage registered users</p>
+        <button class="btn btn-success" @onclick="ShowCreateUser">+ Create User</button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @successMessage
+            <button type="button" class="btn-close" @onclick="() => successMessage = null"></button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @errorMessage
+            <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+        </div>
+    }
+
+    @if (showCreateForm)
+    {
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Create New User</h5>
+            </div>
+            <div class="card-body">
+                <EditForm Model="@newUser" OnValidSubmit="HandleCreateUser">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Name</label>
+                            <InputText class="form-control" @bind-Value="newUser.Name" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Email</label>
+                            <InputText class="form-control" @bind-Value="newUser.Email" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Password</label>
+                            <InputText type="password" class="form-control" @bind-Value="newUser.Password" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Role</label>
+                            <select class="form-select" @bind="newUser.Role">
+                                <option value="User">User</option>
+                                <option value="Admin">Admin</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <button type="submit" class="btn btn-primary me-2" disabled="@isSubmitting">
+                            @if (isSubmitting)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            Create
+                        </button>
+                        <button type="button" class="btn btn-secondary" @onclick="() => showCreateForm = false">Cancel</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    }
+
+    <table class="table table-striped table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Roles</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (userViewModels is not null)
+            {
+                @foreach (var vm in userViewModels)
+                {
+                    <tr>
+                        <td>@vm.Name</td>
+                        <td>@vm.Email</td>
+                        <td>
+                            @foreach (var role in vm.Roles)
+                            {
+                                <span class="badge @(role == "Admin" ? "bg-danger" : "bg-primary") me-1">@role</span>
+                            }
+                        </td>
+                        <td>
+                            @if (!vm.IsAdmin || vm.Id != currentUserId)
+                            {
+                                <button class="btn btn-sm btn-outline-danger"
+                                        @onclick="() => ConfirmDeleteUser(vm.Id, vm.Email)">
+                                    Delete
+                                </button>
+                            }
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+}
+
+@if (showDeleteConfirm)
+{
+    <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm Delete</h5>
+                    <button type="button" class="btn-close" @onclick="() => showDeleteConfirm = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete user <strong>@deleteTargetName</strong>?</p>
+                    <p class="text-danger">This action cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showDeleteConfirm = false">Cancel</button>
+                    <button type="button" class="btn btn-danger" @onclick="HandleDeleteUser">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private List<UserViewModel>? userViewModels;
+    private bool isLoading = true;
+    private bool showCreateForm;
+    private bool isSubmitting;
+    private bool showDeleteConfirm;
+    private string? deleteTargetId;
+    private string? deleteTargetName;
+    private string? successMessage;
+    private string? errorMessage;
+    private string? currentUserId;
+    private readonly NewUserModel newUser = new();
+
+    private class NewUserModel
+    {
+        public string Name { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Password { get; set; } = "";
+        public string Role { get; set; } = "User";
+    }
+
+    private class UserViewModel
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Email { get; set; } = "";
+        public List<string> Roles { get; set; } = new();
+        public bool IsAdmin => Roles.Contains("Admin");
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        if (AuthStateTask is not null)
+        {
+            var authState = await AuthStateTask;
+            currentUserId = (await UserManager.GetUserAsync(authState.User))?.Id;
+        }
+        await LoadUsers();
+    }
+
+    private async Task LoadUsers()
+    {
+        isLoading = true;
+        try
+        {
+            var users = await Task.Run(() => UserManager.Users.ToList());
+            userViewModels = new List<UserViewModel>();
+            foreach (var u in users)
+            {
+                var roles = await UserManager.GetRolesAsync(u);
+                userViewModels.Add(new UserViewModel
+                {
+                    Id = u.Id,
+                    Name = u.Name ?? "",
+                    Email = u.Email ?? "",
+                    Roles = roles.ToList()
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load users: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ShowCreateUser()
+    {
+        showCreateForm = true;
+        newUser.Name = "";
+        newUser.Email = "";
+        newUser.Password = "";
+        newUser.Role = "User";
+    }
+
+    private async Task HandleCreateUser()
+    {
+        isSubmitting = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var user = new User
+            {
+                UserName = newUser.Email,
+                Email = newUser.Email,
+                Name = newUser.Name
+            };
+
+            var result = await UserManager.CreateAsync(user, newUser.Password);
+            if (!result.Succeeded)
+            {
+                errorMessage = string.Join("; ", result.Errors.Select(e => e.Description));
+                return;
+            }
+
+            await UserManager.AddToRoleAsync(user, newUser.Role);
+
+            successMessage = $"User '{newUser.Name}' created successfully.";
+            showCreateForm = false;
+            await LoadUsers();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error creating user: {ex.Message}";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void ConfirmDeleteUser(string userId, string userName)
+    {
+        deleteTargetId = userId;
+        deleteTargetName = userName;
+        showDeleteConfirm = true;
+    }
+
+    private async Task HandleDeleteUser()
+    {
+        if (deleteTargetId is null) return;
+
+        try
+        {
+            var user = await UserManager.FindByIdAsync(deleteTargetId);
+            if (user is not null)
+            {
+                var result = await UserManager.DeleteAsync(user);
+                if (result.Succeeded)
+                {
+                    successMessage = $"User '{deleteTargetName}' deleted.";
+                }
+                else
+                {
+                    errorMessage = string.Join("; ", result.Errors.Select(e => e.Description));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error deleting user: {ex.Message}";
+        }
+        finally
+        {
+            showDeleteConfirm = false;
+            deleteTargetId = null;
+            deleteTargetName = null;
+            await LoadUsers();
+        }
+    }
+}

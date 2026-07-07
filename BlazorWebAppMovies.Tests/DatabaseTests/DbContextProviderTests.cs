@@ -1,5 +1,6 @@
 using BlazorWebAppMovies.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Design;
 
 namespace BlazorWebAppMovies.Tests.DatabaseTests;
 
@@ -9,7 +10,7 @@ public class DbContextProviderTests
     public void DesignTimeDbContextFactory_CreatesSqliteContext()
     {
         var factory = new DesignTimeDbContextFactory();
-        using var context = factory.CreateDbContext([]);
+        using var context = ((IDesignTimeDbContextFactory<BlazorWebAppMoviesContextSqlite>)factory).CreateDbContext([]);
 
         Assert.NotNull(context);
         Assert.IsType<BlazorWebAppMoviesContextSqlite>(context);
@@ -18,13 +19,13 @@ public class DbContextProviderTests
     [Fact]
     public void DesignTimeDbContextFactory_CreatesSqlServerContext()
     {
-        const string configFileName = "appsettings.json";
-        var originalContent = File.Exists(configFileName) ? File.ReadAllText(configFileName) : null;
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempDir);
+        var configPath = Path.Combine(tempDir, "appsettings.json");
 
         try
         {
-            // Override appsettings.json to use SqlServer provider
-            File.WriteAllText(configFileName, /*lang=json*/ """
+            File.WriteAllText(configPath, /*lang=json*/ """
             {
               "DatabaseProvider": "SqlServer",
               "ConnectionStrings": {
@@ -34,18 +35,15 @@ public class DbContextProviderTests
             """);
 
             var factory = new DesignTimeDbContextFactory();
-            using var context = factory.CreateDbContext([]);
+            using var context = ((IDesignTimeDbContextFactory<BlazorWebAppMoviesContextSqlServer>)factory).CreateDbContext([configPath]);
 
             Assert.NotNull(context);
             Assert.IsType<BlazorWebAppMoviesContextSqlServer>(context);
         }
         finally
         {
-            // Restore original appsettings.json
-            if (originalContent != null)
-                File.WriteAllText(configFileName, originalContent);
-            else if (File.Exists(configFileName))
-                File.Delete(configFileName);
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
         }
     }
 

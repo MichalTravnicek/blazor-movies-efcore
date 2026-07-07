@@ -1,4 +1,6 @@
 using BlazorWebAppMovies.Data;
+using BlazorWebAppMovies.Models;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -6,56 +8,66 @@ namespace BlazorWebAppMovies.Tests.DatabaseTests;
 
 public class SeedDataTests
 {
-    private static ServiceProvider CreateServiceProvider(string? dbName = null)
+    private static (IDbContextFactory<BlazorWebAppMoviesContext>, IServiceProvider) CreateServices(string? dbName = null)
     {
+        var dbNameResolved = dbName ?? Guid.NewGuid().ToString();
         var services = new ServiceCollection();
 
-        services.AddDbContext<BlazorWebAppMoviesContext>(options =>
-            options.UseInMemoryDatabase(databaseName: dbName ?? Guid.NewGuid().ToString()));
+        services.AddDbContextFactory<BlazorWebAppMoviesContext>(options =>
+            options.UseInMemoryDatabase(databaseName: dbNameResolved));
 
-        return services.BuildServiceProvider();
+        services.AddDbContext<BlazorWebAppMoviesContext>(options =>
+            options.UseInMemoryDatabase(databaseName: dbNameResolved));
+
+        services.AddIdentity<User, IdentityRole>()
+            .AddEntityFrameworkStores<BlazorWebAppMoviesContext>()
+            .AddDefaultTokenProviders();
+
+        services.AddLogging();
+
+        var serviceProvider = services.BuildServiceProvider();
+        var factory = serviceProvider.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
+
+        return (factory, serviceProvider);
     }
 
     [Fact]
-    public void SeedData_SeedsMovies_WhenDatabaseEmpty()
+    public async Task SeedData_SeedsMovies_WhenDatabaseEmpty()
     {
-        var serviceProvider = CreateServiceProvider();
+        var (factory, services) = CreateServices();
 
-        using var scope = serviceProvider.CreateScope();
-        SeedData.Initialize(scope.ServiceProvider);
+        await SeedData.Initialize(factory, services);
 
-        var context = scope.ServiceProvider.GetRequiredService<BlazorWebAppMoviesContext>();
+        using var context = factory.CreateDbContext();
         var movies = context.Movie.ToList();
         Assert.NotEmpty(movies);
     }
 
     [Fact]
-    public void SeedData_DoesNotDuplicate_WhenAlreadySeeded()
+    public async Task SeedData_DoesNotDuplicate_WhenAlreadySeeded()
     {
-        var serviceProvider = CreateServiceProvider();
+        var (factory, services) = CreateServices();
 
-        using var scope = serviceProvider.CreateScope();
         // First call seeds
-        SeedData.Initialize(scope.ServiceProvider);
+        await SeedData.Initialize(factory, services);
         // Second call should not duplicate
-        SeedData.Initialize(scope.ServiceProvider);
+        await SeedData.Initialize(factory, services);
 
-        var context = scope.ServiceProvider.GetRequiredService<BlazorWebAppMoviesContext>();
+        using var context = factory.CreateDbContext();
 
-        // Assert that Mad Max appears only once (unique by title check)
+        // Assert that Mad Max appears only once
         var madMaxCount = context.Movie.Count(m => m.Title == "Mad Max");
         Assert.Equal(1, madMaxCount);
     }
 
     [Fact]
-    public void SeedData_ContainsExpectedMovies()
+    public async Task SeedData_ContainsExpectedMovies()
     {
-        var serviceProvider = CreateServiceProvider();
+        var (factory, services) = CreateServices();
 
-        using var scope = serviceProvider.CreateScope();
-        SeedData.Initialize(scope.ServiceProvider);
+        await SeedData.Initialize(factory, services);
 
-        var context = scope.ServiceProvider.GetRequiredService<BlazorWebAppMoviesContext>();
+        using var context = factory.CreateDbContext();
         var movies = context.Movie.ToList();
 
         Assert.Contains(movies, m => m.Title == "Mad Max");
@@ -67,14 +79,13 @@ public class SeedDataTests
     }
 
     [Fact]
-    public void SeedData_MoviesHaveValidData()
+    public async Task SeedData_MoviesHaveValidData()
     {
-        var serviceProvider = CreateServiceProvider();
+        var (factory, services) = CreateServices();
 
-        using var scope = serviceProvider.CreateScope();
-        SeedData.Initialize(scope.ServiceProvider);
+        await SeedData.Initialize(factory, services);
 
-        var context = scope.ServiceProvider.GetRequiredService<BlazorWebAppMoviesContext>();
+        using var context = factory.CreateDbContext();
         var furyRoad = context.Movie.First(m => m.Title == "Mad Max: Fury Road");
 
         Assert.Equal(new DateOnly(2015, 5, 15), furyRoad.ReleaseDate);
