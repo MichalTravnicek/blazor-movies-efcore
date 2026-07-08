@@ -18,6 +18,42 @@ Switch between them by changing the `DatabaseProvider` setting in `appsettings.j
 
 ## Architecture
 
+The app has a **dual UI architecture** — Blazor Interactive Server and Classic UI (Razor Pages + jQuery) — sharing the same backend.
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                           BlazorWebAppMovies                             │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│   ┌───────────────────────────┐          ┌───────────────────────────┐   │
+│   │         Blazor UI         │          │        Classic UI         │   │
+│   │   (Interactive Server)    │          │  (Razor Pages + jQuery)   │   │
+│   ├───────────────────────────┤          ├───────────────────────────┤   │
+│   │  • DbContextFactory       │          │  • Page Models            │   │
+│   │  • UserManager            │          │  • UserManager            │   │
+│   │  • SignalR (client)       │          │  • jQuery AJAX            │   │
+│   └─────────────┬─────────────┘          └─────────────┬─────────────┘   │
+│                 │                                      │                 │
+│                 │                                      ▼                 │
+│                 │                        ┌───────────────────────────┐   │
+│                 │                        │      API Controllers      │   │
+│                 │                        │   (Movies, Auth, Admin)   │   │
+│                 │                        └─────────────┬─────────────┘   │
+│                 │                                      │                 │
+│                 ▼                                      ▼                 │
+│   ┌──────────────────────────────────────────────────────────────────┐   │
+│   │                        Database (SQLite)                         │   │
+│   └──────────────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────────────┘
+
+```
+
+For detailed documentation, see:
+- [UI Architecture Guide](docs/ui-architecture-guide.md)
+- [Backend Architecture Guide](docs/backend-architecture-guide.md)
+
+### Database Providers
+
 Each database provider has its own `DbContext` subclass so that EF Core can
 maintain separate migration histories:
 
@@ -212,10 +248,12 @@ On startup, `SeedData` creates two roles and an admin user:
 | Movies — Edit | ❌ | ✅ | ✅ |
 | Movies — Delete | ❌ | ✅ | ✅ |
 | User Management | ❌ | ❌ | ✅ |
+| Classic UI — Movies (`/classic/movies`) | ✅ | ✅ | ✅ |
+| Classic UI — Users (`/classic/users`) | ❌ | ❌ | ✅ |
 
 New users can register via the API endpoint (`POST /api/auth/register`) but
 there is no self-service sign-up UI. User accounts must be created by an admin
-through the User Management page.
+through the User Management page (Blazor or Classic UI).
 
 ### Classic UI (jQuery)
 
@@ -227,8 +265,23 @@ It shares the same API controllers, JWT auth, and database as the Blazor UI.
 | Movies (public) | `/classic/movies` |
 | User Management (admin only) | `/classic/users` |
 
+The Classic UI has its own login modal, navbar, and CRUD modals for both movies and users.
 Switch between UIs using the nav link in the Classic UI, or the "Choose Your UI"
 card on the Blazor Home page. Your preference is stored in a cookie.
+
+### User Management Features
+
+Both UIs support full user management for admins:
+
+| Feature | Blazor UI (`/usermanagement`) | Classic UI (`/classic/users`) |
+|---------|-------------------------------|-------------------------------|
+| List users | ✅ | ✅ |
+| Create user | ✅ | ✅ |
+| Edit user (name, email, role) | ✅ | ✅ |
+| Change password | ✅ | ✅ |
+| Delete user | ✅ (self-protected) | ✅ (self-protected) |
+
+Admins can edit their own account but cannot delete themselves.
 
 ## Test Suite
 
@@ -241,6 +294,11 @@ The project contains **245 unit tests** across multiple test categories:
 | Blazor UI (service layer) | 51 | Movie CRUD, user management, auth flow, role guards |
 | Database / Models | ~70 | Entity validation, queries, context, seed data |
 | DTOs / Mapping | 27 | DTO validation, AutoMapper profiles |
+
+Run all tests:
+```
+dotnet test
+```
 
 ### How authentication works
 
