@@ -1,7 +1,7 @@
-using System.Security.Claims;
+using AutoMapper;
 using BlazorWebAppMovies.Data;
-using BlazorWebAppMovies.Models;
-using Microsoft.AspNetCore.Identity;
+using BlazorWebAppMovies.Models.Dtos;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -24,15 +24,6 @@ public class BlazorMoviesPageTests : IDisposable
         services.AddDbContextFactory<BlazorWebAppMoviesContext>(options =>
             options.UseInMemoryDatabase(_dbName));
 
-        services.AddIdentity<User, IdentityRole>()
-            .AddEntityFrameworkStores<BlazorWebAppMoviesContext>()
-            .AddDefaultTokenProviders();
-
-        services.Configure<IdentityOptions>(options =>
-        {
-            options.ClaimsIdentity.RoleClaimType = "role";
-        });
-
         services.AddLogging();
 
         var serviceProvider = services.BuildServiceProvider();
@@ -49,11 +40,28 @@ public class BlazorMoviesPageTests : IDisposable
     private async Task SeedMovies()
     {
         _context.Movie.AddRange(
-            new Movie { Title = "Movie A", Genre = "Action", Price = 9.99m, ReleaseDate = new DateOnly(2024, 1, 1), Rating = "PG-13" },
-            new Movie { Title = "Movie B", Genre = "Comedy", Price = 7.99m, ReleaseDate = new DateOnly(2024, 2, 1), Rating = "PG" },
-            new Movie { Title = "Movie C", Genre = "Drama", Price = 12.99m, ReleaseDate = new DateOnly(2024, 3, 1), Rating = "R" }
+            new Models.Movie { Title = "Movie A", Genre = "Action", Price = 9.99m, ReleaseDate = new DateOnly(2024, 1, 1), Rating = "PG-13" },
+            new Models.Movie { Title = "Movie B", Genre = "Comedy", Price = 7.99m, ReleaseDate = new DateOnly(2024, 2, 1), Rating = "PG" },
+            new Models.Movie { Title = "Movie C", Genre = "Drama", Price = 12.99m, ReleaseDate = new DateOnly(2024, 3, 1), Rating = "R" }
         );
         await _context.SaveChangesAsync();
+    }
+
+    private static global::BlazorWebAppMovies.Controllers.MoviesController CreateController(string dbName)
+    {
+        var factory = new ControllerTestDbContextFactory(() =>
+        {
+            var opts = new DbContextOptionsBuilder<BlazorWebAppMoviesContext>()
+                .UseInMemoryDatabase(dbName)
+                .Options;
+            return new BlazorWebAppMoviesContext(opts);
+        });
+
+        var mapperProvider = new global::AutoMapper.MapperConfiguration(
+            cfg => cfg.AddProfile<global::BlazorWebAppMovies.Models.Mapping.MovieProfile>(),
+            Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance).CreateMapper();
+
+        return new global::BlazorWebAppMovies.Controllers.MoviesController(factory, mapperProvider);
     }
 
     // ── Movie list (Index.razor logic) ──────────────────────────
@@ -63,8 +71,12 @@ public class BlazorMoviesPageTests : IDisposable
     {
         await SeedMovies();
 
-        var movies = await _context.Movie.ToListAsync();
-        Assert.Equal(3, movies.Count);
+        var controller = CreateController(_dbName);
+        var movies = await controller.GetAll();
+        var okResult = Assert.IsType<OkObjectResult>(movies.Result);
+        var list = Assert.IsType<List<MovieDto>>(okResult.Value);
+
+        Assert.Equal(3, list.Count);
     }
 
     [Fact]
@@ -72,7 +84,12 @@ public class BlazorMoviesPageTests : IDisposable
     {
         await SeedMovies();
 
-        var filtered = await _context.Movie.Where(m => m.Title!.Contains("Movie")).ToListAsync();
+        var controller = CreateController(_dbName);
+        var allMovies = await controller.GetAll();
+        var okResult = Assert.IsType<OkObjectResult>(allMovies.Result);
+        var list = Assert.IsType<List<MovieDto>>(okResult.Value);
+
+        var filtered = list.Where(m => m.Title.Contains("Movie", StringComparison.OrdinalIgnoreCase)).ToList();
         Assert.Equal(3, filtered.Count);
     }
 
@@ -81,7 +98,12 @@ public class BlazorMoviesPageTests : IDisposable
     {
         await SeedMovies();
 
-        var filtered = await _context.Movie.Where(m => m.Title!.Contains("Zzz")).ToListAsync();
+        var controller = CreateController(_dbName);
+        var allMovies = await controller.GetAll();
+        var okResult = Assert.IsType<OkObjectResult>(allMovies.Result);
+        var list = Assert.IsType<List<MovieDto>>(okResult.Value);
+
+        var filtered = list.Where(m => m.Title.Contains("Zzz", StringComparison.OrdinalIgnoreCase)).ToList();
         Assert.Empty(filtered);
     }
 
@@ -90,17 +112,25 @@ public class BlazorMoviesPageTests : IDisposable
     {
         await SeedMovies();
 
-        var movies = await _context.Movie.OrderBy(m => m.ReleaseDate).ToListAsync();
-        Assert.Equal("Movie A", movies[0].Title);
-        Assert.Equal("Movie B", movies[1].Title);
-        Assert.Equal("Movie C", movies[2].Title);
+        var controller = CreateController(_dbName);
+        var movies = await controller.GetAll();
+        var okResult = Assert.IsType<OkObjectResult>(movies.Result);
+        var list = Assert.IsType<List<MovieDto>>(okResult.Value);
+
+        Assert.Equal("Movie A", list[0].Title);
+        Assert.Equal("Movie B", list[1].Title);
+        Assert.Equal("Movie C", list[2].Title);
     }
 
     [Fact]
     public async Task MovieList_WhenEmpty_ReturnsNone()
     {
-        var movies = await _context.Movie.ToListAsync();
-        Assert.Empty(movies);
+        var controller = CreateController(_dbName);
+        var movies = await controller.GetAll();
+        var okResult = Assert.IsType<OkObjectResult>(movies.Result);
+        var list = Assert.IsType<List<MovieDto>>(okResult.Value);
+
+        Assert.Empty(list);
     }
 
     // ── Movie details page (Details.razor logic) ────────────────
@@ -109,7 +139,13 @@ public class BlazorMoviesPageTests : IDisposable
     public async Task MovieDetails_ReturnsCorrectMovie()
     {
         await SeedMovies();
-        var movie = await _context.Movie.FirstAsync(m => m.Title == "Movie A");
+
+        var controller = CreateController(_dbName);
+        var allMovies = await controller.GetAll();
+        var okResult = Assert.IsType<OkObjectResult>(allMovies.Result);
+        var list = Assert.IsType<List<MovieDto>>(okResult.Value);
+
+        var movie = list.First(m => m.Title == "Movie A");
 
         Assert.Equal("Action", movie.Genre);
         Assert.Equal(9.99m, movie.Price);
@@ -120,8 +156,10 @@ public class BlazorMoviesPageTests : IDisposable
     [Fact]
     public async Task MovieDetails_NonExistentId_ReturnsNull()
     {
-        var movie = await _context.Movie.FirstOrDefaultAsync(m => m.Id == 999);
-        Assert.Null(movie);
+        var controller = CreateController(_dbName);
+        var result = await controller.GetById(999);
+
+        Assert.IsType<NotFoundObjectResult>(result.Result);
     }
 
     // ── Movie create (Create.razor logic) ───────────────────────
@@ -129,7 +167,8 @@ public class BlazorMoviesPageTests : IDisposable
     [Fact]
     public async Task MovieCreate_AddsMovieToDatabase()
     {
-        var movie = new Movie
+        var controller = CreateController(_dbName);
+        var dto = new CreateMovieDto
         {
             Title = "New Movie",
             Genre = "Sci-Fi",
@@ -138,32 +177,35 @@ public class BlazorMoviesPageTests : IDisposable
             Rating = "PG-13"
         };
 
-        _context.Movie.Add(movie);
-        await _context.SaveChangesAsync();
+        var result = await controller.Create(dto);
 
-        var saved = await _context.Movie.FirstAsync(m => m.Title == "New Movie");
-        Assert.NotNull(saved);
-        Assert.Equal("Sci-Fi", saved.Genre);
+        var createdResult = Assert.IsType<CreatedAtActionResult>(result.Result);
+        var movieDto = Assert.IsType<MovieDto>(createdResult.Value);
+        Assert.Equal("New Movie", movieDto.Title);
+        Assert.Equal("Sci-Fi", movieDto.Genre);
     }
 
     [Fact]
     public async Task MovieCreate_IncrementsCount()
     {
         await SeedMovies();
-        var beforeCount = await _context.Movie.CountAsync();
 
-        _context.Movie.Add(new Movie
+        var controller = CreateController(_dbName);
+        var dto = new CreateMovieDto
         {
             Title = "Extra",
             Genre = "Action",
             Price = 5m,
             ReleaseDate = new DateOnly(2025, 1, 1),
             Rating = "G"
-        });
-        await _context.SaveChangesAsync();
+        };
 
-        var afterCount = await _context.Movie.CountAsync();
-        Assert.Equal(beforeCount + 1, afterCount);
+        await controller.Create(dto);
+
+        var allMovies = await controller.GetAll();
+        var okResult = Assert.IsType<OkObjectResult>(allMovies.Result);
+        var movies = Assert.IsType<List<MovieDto>>(okResult.Value);
+        Assert.Equal(4, movies.Count);
     }
 
     // ── Movie edit (Edit.razor logic) ───────────────────────────
@@ -172,14 +214,27 @@ public class BlazorMoviesPageTests : IDisposable
     public async Task MovieEdit_UpdatesFields()
     {
         await SeedMovies();
-        var movie = await _context.Movie.FirstAsync(m => m.Title == "Movie A");
 
-        movie.Title = "Updated Title";
-        movie.Price = 19.99m;
-        _context.Movie.Update(movie);
-        await _context.SaveChangesAsync();
+        var controller = CreateController(_dbName);
 
-        var updated = await _context.Movie.FirstAsync(m => m.Id == movie.Id);
+        var allMovies = await controller.GetAll();
+        var okResult = Assert.IsType<OkObjectResult>(allMovies.Result);
+        var movies = Assert.IsType<List<MovieDto>>(okResult.Value);
+        var movieId = movies[0].Id;
+
+        var updateDto = new UpdateMovieDto
+        {
+            Title = "Updated Title",
+            Genre = "Action",
+            Price = 19.99m,
+            ReleaseDate = new DateOnly(2024, 1, 1),
+            Rating = "PG-13"
+        };
+
+        var updateResult = await controller.Update(movieId, updateDto);
+        var updatedOk = Assert.IsType<OkObjectResult>(updateResult.Result);
+        var updated = Assert.IsType<MovieDto>(updatedOk.Value);
+
         Assert.Equal("Updated Title", updated.Title);
         Assert.Equal(19.99m, updated.Price);
     }
@@ -188,21 +243,46 @@ public class BlazorMoviesPageTests : IDisposable
     public async Task MovieEdit_OnlyUpdatesSpecifiedMovie()
     {
         await SeedMovies();
-        var movie = await _context.Movie.FirstAsync(m => m.Title == "Movie A");
 
-        movie.Title = "Updated A";
-        await _context.SaveChangesAsync();
+        var controller = CreateController(_dbName);
 
-        var other = await _context.Movie.FirstAsync(m => m.Title == "Movie B");
-        Assert.NotNull(other);
-        Assert.Equal("Movie B", other.Title);
+        var allMovies = await controller.GetAll();
+        var okResult = Assert.IsType<OkObjectResult>(allMovies.Result);
+        var movies = Assert.IsType<List<MovieDto>>(okResult.Value);
+
+        var updateDto = new UpdateMovieDto
+        {
+            Title = "Updated A",
+            Genre = "Action",
+            Price = 9.99m,
+            ReleaseDate = new DateOnly(2024, 1, 1),
+            Rating = "PG-13"
+        };
+
+        await controller.Update(movies[0].Id, updateDto);
+
+        var updatedList = await controller.GetAll();
+        var listOk = Assert.IsType<OkObjectResult>(updatedList.Result);
+        var updatedMovies = Assert.IsType<List<MovieDto>>(listOk.Value);
+        var movieB = updatedMovies.First(m => m.Title == "Movie B");
+        Assert.NotNull(movieB);
     }
 
     [Fact]
-    public async Task MovieEdit_NonExistentId_ReturnsNull()
+    public async Task MovieEdit_NonExistentId_ReturnsNotFound()
     {
-        var movie = await _context.Movie.FindAsync(999);
-        Assert.Null(movie);
+        var controller = CreateController(_dbName);
+        var updateDto = new UpdateMovieDto
+        {
+            Title = "Ghost",
+            Genre = "Horror",
+            Price = 5m,
+            ReleaseDate = new DateOnly(2025, 1, 1),
+            Rating = "R"
+        };
+
+        var result = await controller.Update(999, updateDto);
+        Assert.IsType<NotFoundObjectResult>(result.Result);
     }
 
     // ── Movie delete (Delete.razor logic) ───────────────────────
@@ -211,41 +291,47 @@ public class BlazorMoviesPageTests : IDisposable
     public async Task MovieDelete_RemovesMovie()
     {
         await SeedMovies();
-        var movie = await _context.Movie.FirstAsync(m => m.Title == "Movie A");
 
-        _context.Movie.Remove(movie);
-        await _context.SaveChangesAsync();
+        var controller = CreateController(_dbName);
 
-        var deleted = await _context.Movie.FirstOrDefaultAsync(m => m.Id == movie.Id);
-        Assert.Null(deleted);
+        var allMovies = await controller.GetAll();
+        var okResult = Assert.IsType<OkObjectResult>(allMovies.Result);
+        var movies = Assert.IsType<List<MovieDto>>(okResult.Value);
+        var movieId = movies[0].Id;
+
+        await controller.Delete(movieId);
+
+        var getResult = await controller.GetById(movieId);
+        Assert.IsType<NotFoundObjectResult>(getResult.Result);
     }
 
     [Fact]
     public async Task MovieDelete_DecrementsCount()
     {
         await SeedMovies();
-        var beforeCount = await _context.Movie.CountAsync();
 
-        var movie = await _context.Movie.FirstAsync();
-        _context.Movie.Remove(movie);
-        await _context.SaveChangesAsync();
+        var controller = CreateController(_dbName);
+        await controller.Delete(1);
 
-        var afterCount = await _context.Movie.CountAsync();
-        Assert.Equal(beforeCount - 1, afterCount);
+        var allMovies = await controller.GetAll();
+        var okResult = Assert.IsType<OkObjectResult>(allMovies.Result);
+        var movies = Assert.IsType<List<MovieDto>>(okResult.Value);
+        Assert.Equal(2, movies.Count);
     }
 
     [Fact]
     public async Task MovieDelete_OnlyRemovesTarget()
     {
         await SeedMovies();
-        var movie = await _context.Movie.FirstAsync(m => m.Title == "Movie A");
 
-        _context.Movie.Remove(movie);
-        await _context.SaveChangesAsync();
+        var controller = CreateController(_dbName);
+        await controller.Delete(1);
 
-        var remaining = await _context.Movie.ToListAsync();
-        Assert.Equal(2, remaining.Count);
-        Assert.DoesNotContain(remaining, m => m.Title == "Movie A");
+        var allMovies = await controller.GetAll();
+        var okResult = Assert.IsType<OkObjectResult>(allMovies.Result);
+        var movies = Assert.IsType<List<MovieDto>>(okResult.Value);
+        Assert.Equal(2, movies.Count);
+        Assert.DoesNotContain(movies, m => m.Title == "Movie A");
     }
 
     // ── Auth state guards (used in Index.razor) ─────────────────
@@ -253,13 +339,13 @@ public class BlazorMoviesPageTests : IDisposable
     [Fact]
     public void AuthenticatedUser_CanSeeCreateEditDeleteButtons()
     {
-        var claims = new List<Claim>
+        var claims = new List<System.Security.Claims.Claim>
         {
-            new(ClaimTypes.Name, "test@test.com"),
-            new(ClaimTypes.Role, "User")
+            new(System.Security.Claims.ClaimTypes.Name, "test@test.com"),
+            new(System.Security.Claims.ClaimTypes.Role, "User")
         };
-        var identity = new ClaimsIdentity(claims, "TestAuth");
-        var principal = new ClaimsPrincipal(identity);
+        var identity = new System.Security.Claims.ClaimsIdentity(claims, "TestAuth");
+        var principal = new System.Security.Claims.ClaimsPrincipal(identity);
 
         bool canSeeCreateEditDelete = principal.Identity?.IsAuthenticated == true;
         Assert.True(canSeeCreateEditDelete);
@@ -268,7 +354,7 @@ public class BlazorMoviesPageTests : IDisposable
     [Fact]
     public void UnauthenticatedUser_CannotSeeCreateEditDeleteButtons()
     {
-        var principal = new ClaimsPrincipal(new ClaimsIdentity());
+        var principal = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity());
 
         bool canSeeCreateEditDelete = principal.Identity?.IsAuthenticated == true;
         Assert.False(canSeeCreateEditDelete);
@@ -278,9 +364,25 @@ public class BlazorMoviesPageTests : IDisposable
     public void UnauthenticatedUser_CanStillSeeDetails()
     {
         // The Details link is always rendered — no auth guard
-        var principal = new ClaimsPrincipal(new ClaimsIdentity());
-
         bool hasDetailsLink = true; // unconditional in template
         Assert.True(hasDetailsLink);
+    }
+}
+
+/// <summary>
+/// Factory used by the controller, backed by the same in-memory database.
+/// </summary>
+internal sealed class ControllerTestDbContextFactory : IDbContextFactory<BlazorWebAppMoviesContext>
+{
+    private readonly Func<BlazorWebAppMoviesContext> _factory;
+
+    public ControllerTestDbContextFactory(Func<BlazorWebAppMoviesContext> factory)
+    {
+        _factory = factory;
+    }
+
+    public BlazorWebAppMoviesContext CreateDbContext()
+    {
+        return _factory();
     }
 }

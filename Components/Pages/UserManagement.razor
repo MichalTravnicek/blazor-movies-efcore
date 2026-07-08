@@ -114,7 +114,7 @@ else
                                     @onclick="() => ShowChangePassword(vm.Id)">
                                 Password
                             </button>
-                            @if (!vm.IsAdmin || vm.Id != currentUserId)
+                            @if (currentUserId is not null && (!vm.IsAdmin || vm.Id != currentUserId))
                             {
                                 <button class="btn btn-sm btn-outline-danger"
                                         @onclick="() => ConfirmDeleteUser(vm.Id, vm.Email)">

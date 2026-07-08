@@ -6,6 +6,7 @@ namespace BlazorWebAppMovies.Data;
 
 public class SeedData
 {
+    
     private static async Task SeedRolesAndAdmin(IServiceProvider serviceProvider)
     {
         var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
@@ -20,23 +21,28 @@ public class SeedData
         {
             await roleManager.CreateAsync(new IdentityRole("User"));
         }
+        
+        await CreateUserWithRole(userManager, "Admin","admin@example.com","Admin", "Admin123!");
+        await CreateUserWithRole(userManager, "Michal","michal@michal.cz","User", "C0mpl3x!Pass");
+    }
 
-        var adminEmail = "admin@example.com";
-        var adminUser = await userManager.FindByEmailAsync(adminEmail);
+    private static async Task CreateUserWithRole(UserManager<User> userManager, string name, string userEmail, string role, string password)
+    {
+        var user = await userManager.FindByEmailAsync(userEmail);
 
-        if (adminUser == null)
+        if (user == null)
         {
-            adminUser = new User
+            user = new User
             {
-                UserName = adminEmail,
-                Email = adminEmail,
-                Name = "Admin"
+                UserName = userEmail,
+                Email = userEmail,
+                Name = name
             };
 
-            var result = await userManager.CreateAsync(adminUser, "Admin123!");
+            var result = await userManager.CreateAsync(user, password);
             if (result.Succeeded)
             {
-                await userManager.AddToRoleAsync(adminUser, "Admin");
+                await userManager.AddToRoleAsync(user, role);
             }
         }
     }
@@ -95,7 +101,7 @@ public class SeedData
 
     public static async Task Initialize(IDbContextFactory<BlazorWebAppMoviesContext> factory, IServiceProvider serviceProvider)
     {
-        using var context = factory.CreateDbContext();
+        await using var context = factory.CreateDbContext();
 
         await SeedRolesAndAdmin(serviceProvider);
         SeedMovies(context);

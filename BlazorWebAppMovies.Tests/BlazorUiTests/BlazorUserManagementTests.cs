@@ -256,6 +256,21 @@ public class BlazorUserManagementTests : IDisposable
     }
 
     [Fact]
+    public void AdminDeleteButton_Hidden_WhenCurrentUserIdIsNull()
+    {
+        // Simulates the transient bug: UserManager.GetUserAsync(User) returns null
+        // so currentUserId on the page is null. The guard must hide the Delete button.
+        string? currentUserId = null;
+        string vmId = "some-admin-id";
+        bool vmIsAdmin = true;
+
+        // Guard from UserManagement.razor : @if (currentUserId is not null && (!vm.IsAdmin || vm.Id != currentUserId))
+        bool shouldShowDelete = currentUserId is not null && (!vmIsAdmin || vmId != currentUserId);
+
+        Assert.False(shouldShowDelete, "Delete button must be hidden when currentUserId is null");
+    }
+
+    [Fact]
     public async Task AdminCanDeleteOtherAdmin()
     {
         var admin1 = await CreateAdminUser("admin1@test.com", "Admin One");

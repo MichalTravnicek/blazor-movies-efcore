@@ -1,6 +1,6 @@
 @page "/movies/details"
-@using Microsoft.EntityFrameworkCore
-@inject IDbContextFactory<BlazorWebAppMoviesContext> DbFactory
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpClientFactory
 @inject NavigationManager NavigationManager
 
 <PageTitle>Details</PageTitle>
@@ -9,9 +9,13 @@
 
 <div>
     <hr />
-    @if (_movie is null)
+    @if (isLoading)
     {
         <p><em>Loading...</em></p>
+    }
+    else if (_movie is null)
+    {
+        <p><em>Movie not found.</em></p>
     }
     else {
         <dl class="row">
@@ -34,19 +38,31 @@
 </div>
 
 @code {
-    private Movie? _movie;
+    private MovieDto? _movie;
+    private bool isLoading = true;
 
     [SupplyParameterFromQuery]
     private int Id { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
-        await using var context = await DbFactory.CreateDbContextAsync();
-        _movie = await context.Movie.FirstOrDefaultAsync(m => m.Id == Id);
+        try
+        {
+            var client = HttpClientFactory.CreateClient("BlazorApi");
+            _movie = await client.GetFromJsonAsync<MovieDto>($"/api/movies/{Id}");
 
-        if (_movie is null)
+            if (_movie is null)
+            {
+                NavigationManager.NavigateTo("notfound");
+            }
+        }
+        catch
         {
             NavigationManager.NavigateTo("notfound");
+        }
+        finally
+        {
+            isLoading = false;
         }
     }
 }

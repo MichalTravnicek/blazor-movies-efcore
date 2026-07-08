@@ -50,7 +50,7 @@
             '<button class="btn btn-sm btn-outline-info me-1 change-password-btn" data-user-id="' +
             row.id +
             '">Password</button>';
-          if (row.id !== window.__currentUserId) {
+          if (window.__canDeleteUsers && row.id !== window.__currentUserId) {
             btns +=
               '<button class="btn btn-sm btn-outline-danger delete-user-btn" data-user-id="' +
               row.id +

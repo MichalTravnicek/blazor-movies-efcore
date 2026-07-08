@@ -82,6 +82,39 @@ public class AuthFlowTests
         var roles = await userManager.GetRolesAsync(admin);
         Assert.Contains("Admin", roles);
     }
+    
+    [Fact]
+    public async Task SeedData_CreatesUser()
+    {
+        var (services, userManager, _) = CreateAuthServices();
+        var factory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
+
+        await SeedData.Initialize(factory, services);
+
+        var user = await userManager.FindByEmailAsync("michal@michal.cz");
+        Assert.NotNull(user);
+        Assert.Equal("Michal", user.Name);
+        var roles = await userManager.GetRolesAsync(user);
+        Assert.Contains("User", roles);
+    }
+    
+    [Fact]
+    public async Task SeedData_UserCanSignIn()
+    {
+        var (services, userManager, _) = CreateAuthServices();
+        var factory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
+
+        await SeedData.Initialize(factory, services);
+
+        var user = await userManager.FindByEmailAsync("michal@michal.cz");
+        Assert.NotNull(user);
+
+        var signInManager = services.GetRequiredService<SignInManager<User>>();
+        var result = await signInManager.CheckPasswordSignInAsync(user, "C0mpl3x!Pass",
+            lockoutOnFailure: false);
+
+        Assert.True(result.Succeeded);
+    }
 
     [Fact]
     public async Task SeedData_AdminUserCanSignIn()

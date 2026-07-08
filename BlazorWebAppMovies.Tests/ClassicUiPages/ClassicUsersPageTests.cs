@@ -219,6 +219,30 @@ public class ClassicUsersPageTests : IDisposable
         Assert.Equal("Admin", authAttr.Roles);
     }
 
+    // ── Self-delete guard ────────────────────────────────────────
+
+    [Fact]
+    public async Task OnGet_CanDeleteUsers_IsTrue_WhenUserFound()
+    {
+        await _pageModel.OnGet();
+
+        Assert.True(_pageModel.CanDeleteUsers);
+    }
+
+    [Fact]
+    public async Task OnGet_CanDeleteUsers_IsFalse_WhenUserNotFound()
+    {
+        // Simulate UserManager.GetUserAsync returning null by
+        // setting the user to a non-existent principal
+        var emptyPrincipal = new ClaimsPrincipal(new ClaimsIdentity());
+        _pageModel.PageContext.HttpContext!.User = emptyPrincipal;
+
+        await _pageModel.OnGet();
+
+        Assert.False(_pageModel.CanDeleteUsers);
+        Assert.Null(_pageModel.CurrentUserId);
+    }
+
     // ── UserDto structure ───────────────────────────────────────
 
     [Fact]

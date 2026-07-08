@@ -1,9 +1,8 @@
 @page "/movies"
 @rendermode InteractiveServer
-@using Microsoft.EntityFrameworkCore
+@using System.Net.Http.Json
 @using Microsoft.AspNetCore.Components.QuickGrid
-@implements IAsyncDisposable
-@inject IDbContextFactory<BlazorWebAppMoviesContext> DbFactory
+@inject IHttpClientFactory HttpClientFactory
 
 <PageTitle>Index</PageTitle>
 
@@ -46,12 +45,12 @@
     private Task<AuthenticationState>? AuthStateTask { get; set; }
 
     private AuthenticationState? authState;
-    private BlazorWebAppMoviesContext context = default!;
+    private List<MovieDto> movies = [];
     private PaginationState pagination = new PaginationState { ItemsPerPage = 5 };
     private string titleFilter = string.Empty;
 
-    private IQueryable<Movie> FilteredMovies =>
-        context.Movie.Where(m => m.Title!.Contains(titleFilter));
+    private IQueryable<MovieDto> FilteredMovies =>
+        movies.AsQueryable().Where(m => m.Title.Contains(titleFilter, StringComparison.OrdinalIgnoreCase));
 
     protected override async Task OnInitializedAsync()
     {
@@ -59,8 +58,20 @@
         {
             authState = await AuthStateTask;
         }
-        context = DbFactory.CreateDbContext();
+
+        await LoadMovies();
     }
 
-    public async ValueTask DisposeAsync() => await context.DisposeAsync();
+    private async Task LoadMovies()
+    {
+        var client = HttpClientFactory.CreateClient("BlazorApi");
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/movies");
+        request.Headers.TryAddWithoutValidation("Accept", "application/json");
+
+        var response = await client.SendAsync(request);
+        if (response.IsSuccessStatusCode)
+        {
+            movies = await response.Content.ReadFromJsonAsync<List<MovieDto>>() ?? [];
+        }
+    }
 }

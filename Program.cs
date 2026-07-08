@@ -9,6 +9,7 @@ using BlazorWebAppMovies.Data;
 using AutoMapper;
 using BlazorWebAppMovies.Models;
 using BlazorWebAppMovies.Models.Mapping;
+using BlazorWebAppMovies.Components.Handlers;
 using BlazorWebAppMovies;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -121,6 +122,16 @@ builder.Services.AddSingleton(sp =>
     return config.CreateMapper();
 });
 
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddTransient<AuthCookieHandler>();
+builder.Services.AddHttpClient("BlazorApi", client =>
+{
+    // Set a placeholder base so SendAsync validation passes for relative URIs.
+    // The AuthCookieHandler will replace it with the real host per-request.
+    client.BaseAddress = new Uri("http://localhost");
+})
+    .AddHttpMessageHandler<AuthCookieHandler>();
+
 builder.Services.AddQuickGridEntityFrameworkAdapter();
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
@@ -186,8 +197,8 @@ app.UseStaticFiles();
 
 // ── Request logging middleware (after auth so User is populated) ──
 
-PathString api = new PathString("/api");
-PathString classicApi = new PathString("/classic");
+var api = new PathString("/api");
+var classicApi = new PathString("/classic");
 
 app.Use(async (context, next) =>
 {

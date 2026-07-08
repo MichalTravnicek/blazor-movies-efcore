@@ -1,17 +1,15 @@
 @page "/movies/create"
-@using Microsoft.EntityFrameworkCore
-@inject IDbContextFactory<BlazorWebAppMoviesContext> DbFactory
+@inject IHttpClientFactory HttpClientFactory
 @inject NavigationManager NavigationManager
 
 <PageTitle>Create</PageTitle>
 
 <h1>Create</h1>
 
-<h2>Movie</h2>
 <hr />
 <div class="row">
     <div class="col-md-4">
-        <EditForm method="post" Model="Movie" OnValidSubmit="AddMovie" FormName="create" Enhance>
+        <EditForm Model="Movie" OnValidSubmit="AddMovie" FormName="create">
             <DataAnnotationsValidator />
             <ValidationSummary class="text-danger" role="alert"/>
             <div class="mb-3">
@@ -26,7 +24,7 @@
             </div>
             <div class="mb-3">
                 <label for="genre" class="form-label">Genre:</label>
-                <InputText id="genre" @bind-Value="Movie.Genre" class="form-control" />
+                <InputText id="genre" @bind-Value="Movie.Genre" class="form-control" placeholder="e.g. Sci-Fi"/>
                 <ValidationMessage For="() => Movie.Genre" class="text-danger" />
             </div>
             <div class="mb-3">
@@ -36,27 +34,75 @@
             </div>
             <div class="mb-3">
                 <label for="rating" class="form-label">Rating:</label>
-                <InputText id="rating" @bind-Value="Movie.Rating" class="form-control" />
+                <select id="rating" class="form-select" @bind="Movie.Rating">
+                    <option value="">Select rating...</option>
+                    <option value="G">G</option>
+                    <option value="PG">PG</option>
+                    <option value="PG-13">PG-13</option>
+                    <option value="R">R</option>
+                    <option value="NC-17">NC-17</option>
+                </select>
                 <ValidationMessage For="() => Movie.Rating" class="text-danger" />
             </div>
-            <button type="submit" class="btn btn-primary">Create</button>
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="text-danger mt-2">@errorMessage</div>
+            }
+            <div class="d-flex gap-1">
+                <button type="submit" class="btn btn-primary" disabled="@isSubmitting">
+                    @if (isSubmitting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    }
+                    Create
+                </button>
+                <a href="/movies" class="btn btn-outline-secondary">Back to List</a>
+            </div>
         </EditForm>
     </div>
 </div>
 
-<div>
-    <a href="/movies" class="btn btn-outline-secondary">Back to List</a>
-</div>
-
 @code {
-    [SupplyParameterFromForm]
-    private Movie Movie { get; set; } = new();
+    private CreateMovieDto Movie { get; set; } = new() { ReleaseDate = DateOnly.FromDateTime(DateTime.Today) };
+    private bool isSubmitting;
+    private string? errorMessage;
 
     private async Task AddMovie()
     {
-        await using var context = await DbFactory.CreateDbContextAsync();
-        context.Movie.Add(Movie);
-        await context.SaveChangesAsync();
-        NavigationManager.NavigateTo("/movies");
+        isSubmitting = true;
+        errorMessage = null;
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("BlazorApi");
+            var response = await client.PostAsJsonAsync("/api/movies", Movie);
+
+            if (response.IsSuccessStatusCode)
+            {
+                NavigationManager.NavigateTo("/movies");
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                var error = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+                errorMessage = error?.Message ?? "A movie with this title already exists.";
+            }
+            else
+            {
+                errorMessage = "An error occurred while creating the movie.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private class ErrorResponse
+    {
+        public string? Message { get; set; }
     }
 }
