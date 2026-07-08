@@ -1,0 +1,199 @@
+@page
+@model BlazorWebAppMovies.Pages.Classic.Movies.IndexModel
+@{
+    ViewData["Title"] = "Movies";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3">Movies</h1>
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createModal">
+            + Create New
+        </button>
+    }
+</div>
+
+<table id="moviesTable" class="table table-striped table-hover" style="width:100%">
+    <thead>
+        <tr>
+            <th>Title</th>
+            <th>Release Date</th>
+            <th>Genre</th>
+            <th>Price</th>
+            <th>Rating</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+</table>
+
+@* ─── Details Modal (available to all users) ─── *@
+<div class="modal fade" id="detailsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Movie Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <dl class="row">
+                    <dt class="col-sm-4">Title</dt>
+                    <dd class="col-sm-8" id="detailsTitleValue"></dd>
+
+                    <dt class="col-sm-4">Release Date</dt>
+                    <dd class="col-sm-8" id="detailsReleaseDate"></dd>
+
+                    <dt class="col-sm-4">Genre</dt>
+                    <dd class="col-sm-8" id="detailsGenre"></dd>
+
+                    <dt class="col-sm-4">Price</dt>
+                    <dd class="col-sm-8" id="detailsPrice"></dd>
+
+                    <dt class="col-sm-4">Rating</dt>
+                    <dd class="col-sm-8" id="detailsRating"></dd>
+                </dl>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (User.Identity?.IsAuthenticated == true)
+{
+    @* ─── Create Modal ─── *@
+    <div class="modal fade" id="createModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create Movie</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createForm">
+                        <div class="mb-3">
+                            <label for="createTitle" class="form-label">Title</label>
+                            <input type="text" id="createTitle" class="form-control" required minlength="3" maxlength="60" />
+                            <div class="invalid-feedback">Title must be 3-60 characters.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="createReleaseDate" class="form-label">Release Date</label>
+                            <input type="date" id="createReleaseDate" class="form-control" required />
+                            <div class="invalid-feedback">Release date is required.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="createGenre" class="form-label">Genre</label>
+                            <input type="text" id="createGenre" class="form-control" placeholder="e.g. Sci-Fi" required />
+                            <div class="invalid-feedback">Genre must start with an uppercase letter.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="createPrice" class="form-label">Price</label>
+                            <input type="number" id="createPrice" class="form-control" step="0.01" min="0" max="100" required />
+                            <div class="invalid-feedback">Price must be between 0 and 100.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="createRating" class="form-label">Rating</label>
+                            <select id="createRating" class="form-select" required>
+                                <option value="">-- Select --</option>
+                                <option value="G">G</option>
+                                <option value="PG">PG</option>
+                                <option value="PG-13">PG-13</option>
+                                <option value="R">R</option>
+                                <option value="NC-17">NC-17</option>
+                            </select>
+                            <div class="invalid-feedback">Rating is required.</div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="createSaveBtn">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ─── Edit Modal ─── *@
+    <div class="modal fade" id="editModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Movie</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editForm">
+                        <input type="hidden" id="editId" />
+                        <div class="mb-3">
+                            <label for="editTitle" class="form-label">Title</label>
+                            <input type="text" id="editTitle" class="form-control" required minlength="3" maxlength="60" />
+                            <div class="invalid-feedback">Title must be 3-60 characters.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editReleaseDate" class="form-label">Release Date</label>
+                            <input type="date" id="editReleaseDate" class="form-control" required />
+                            <div class="invalid-feedback">Release date is required.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editGenre" class="form-label">Genre</label>
+                            <input type="text" id="editGenre" class="form-control" required />
+                            <div class="invalid-feedback">Genre must start with an uppercase letter.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editPrice" class="form-label">Price</label>
+                            <input type="number" id="editPrice" class="form-control" step="0.01" min="0" max="100" required />
+                            <div class="invalid-feedback">Price must be between 0 and 100.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editRating" class="form-label">Rating</label>
+                            <select id="editRating" class="form-select" required>
+                                <option value="">-- Select --</option>
+                                <option value="G">G</option>
+                                <option value="PG">PG</option>
+                                <option value="PG-13">PG-13</option>
+                                <option value="R">R</option>
+                                <option value="NC-17">NC-17</option>
+                            </select>
+                            <div class="invalid-feedback">Rating is required.</div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="editSaveBtn">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ─── Delete Confirm Modal ─── *@
+    <div class="modal fade" id="deleteModal" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Delete Movie</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete <strong id="deleteTitle"></strong>?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="deleteConfirmBtn">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ─── Toast for notifications ─── *@
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="toast" class="toast" role="alert">
+        <div class="toast-header">
+            <strong class="me-auto" id="toastTitle">Notification</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body" id="toastMessage"></div>
+    </div>
+</div>

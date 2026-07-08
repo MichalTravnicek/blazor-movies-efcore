@@ -87,6 +87,8 @@ public class AuthController : ControllerBase
         var token = await GenerateJwtToken(user);
 
         // 🔒 Set cookie server-side with HttpOnly + Secure
+        // Token is never exposed to JavaScript — the JS client relies on the cookie.
+        // For Swagger testing, extract the token from the Set-Cookie header in DevTools.
         Response.Cookies.Append("auth_token", token, new CookieOptions
         {
             HttpOnly = true,

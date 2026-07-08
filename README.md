@@ -217,6 +217,31 @@ New users can register via the API endpoint (`POST /api/auth/register`) but
 there is no self-service sign-up UI. User accounts must be created by an admin
 through the User Management page.
 
+### Classic UI (jQuery)
+
+The app also provides a **Classic UI** built with Razor Pages + jQuery + DataTables.
+It shares the same API controllers, JWT auth, and database as the Blazor UI.
+
+| Feature | Classic UI URL |
+|---|---|
+| Movies (public) | `/classic/movies` |
+| User Management (admin only) | `/classic/users` |
+
+Switch between UIs using the nav link in the Classic UI, or the "Choose Your UI"
+card on the Blazor Home page. Your preference is stored in a cookie.
+
+## Test Suite
+
+The project contains **245 unit tests** across multiple test categories:
+
+| Category | Tests | What it covers |
+|---|---|---|
+| Controllers | 63 | `AuthController`, `MoviesController`, `AdminController` |
+| Classic UI Pages | 23 | Page model data binding, auth state, JSON serialization |
+| Blazor UI (service layer) | 51 | Movie CRUD, user management, auth flow, role guards |
+| Database / Models | ~70 | Entity validation, queries, context, seed data |
+| DTOs / Mapping | 27 | DTO validation, AutoMapper profiles |
+
 ### How authentication works
 
 1. The login form on the Home page calls the JavaScript `authService.login()` function
@@ -254,3 +279,44 @@ docker compose down -v
 ```
 
 This stops the container and removes the volume, deleting all data.
+
+---
+
+## Movies API
+
+The app exposes a RESTful JSON API for managing movies using **AutoMapper** for entity-to-DTO mapping.
+
+### Endpoints
+
+| Method | Route | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/movies` | Public | List all movies (ordered by release date) |
+| `GET` | `/api/movies/{id}` | Public | Get a single movie by ID |
+| `POST` | `/api/movies` | Required | Create a new movie |
+| `PUT` | `/api/movies/{id}` | Required | Update an existing movie |
+| `DELETE` | `/api/movies/{id}` | Required | Delete a movie |
+
+### DTOs
+
+| DTO | Direction | Purpose |
+|---|---|---|
+| `MovieDto` | Output | Full movie data including Id |
+| `CreateMovieDto` | Input | Create a movie (validated) |
+| `UpdateMovieDto` | Input | Update a movie (validated) |
+
+All input DTOs carry the same validation rules as the `Movie` entity — title (3-60 chars, no whitespace-only), genre (uppercase-starting), rating (G/PG/PG-13/R/NC-17), and price (0-100).
+
+### AutoMapper
+
+The `MovieProfile` class in `Models/Mapping/` defines three mappings:
+
+- `Movie → MovieDto` — all properties, including Id
+- `CreateMovieDto → Movie` — Id is ignored (DB-generated)
+- `UpdateMovieDto → Movie` — Id is ignored (preserved from existing entity)
+
+AutoMapper is registered as a singleton in `Program.cs` with `AssertConfigurationIsValid()` at startup.
+
+### Swagger
+
+The API is documented via Swagger UI at `/swagger` (development-only). JWT bearer authentication is configured in Swagger — click the **Authorize** button and enter your JWT token to test protected endpoints.
+When logged in web UI authenticated access of Swagger works out of the box.

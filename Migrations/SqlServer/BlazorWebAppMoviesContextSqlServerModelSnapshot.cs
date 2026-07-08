@@ -52,6 +52,9 @@ namespace BlazorWebAppMovies.Migrations.SqlServer
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Title")
+                        .IsUnique();
+
                     b.ToTable("Movie");
                 });
 

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using BlazorWebAppMovies.Components;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -5,8 +6,19 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using BlazorWebAppMovies.Data;
+using AutoMapper;
 using BlazorWebAppMovies.Models;
+using BlazorWebAppMovies.Models.Mapping;
+using BlazorWebAppMovies;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.OpenApi.Models;
+
+
+
+
+// ── Suppress noisy EF Core SQL logs ──
+AppContext.SetSwitch("Microsoft.EntityFrameworkCore.Issue21997", true);
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -59,6 +71,7 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddAuthorization();
 builder.Services.AddCascadingAuthenticationState();
 
+builder.Services.AddRazorPages();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -89,11 +102,25 @@ builder.Services.AddSwaggerGen(options =>
                     Type = ReferenceType.SecurityScheme,
                     Id = "Bearer"
                 }
-            },
-            []
+            },[]
         }
     });
+
+    // Use meaningful examples instead of Swagger's random generation
+    options.SchemaFilter<SwaggerExampleFilter>();
+
+    // Describe how to get JWT from login for Swagger Authorize
+    options.OperationFilter<SwaggerLoginDescriptionFilter>();
+
 });
+builder.Services.AddSingleton(sp =>
+{
+    var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+    var config = new MapperConfiguration(cfg => cfg.AddProfile<MovieProfile>(), loggerFactory);
+    config.AssertConfigurationIsValid();
+    return config.CreateMapper();
+});
+
 builder.Services.AddQuickGridEntityFrameworkAdapter();
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
@@ -102,21 +129,38 @@ builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// ── Suppress EF Core SQL logs in console ──
+builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
+builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Query", LogLevel.Warning);
+builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Infrastructure", LogLevel.Warning);
+
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+using (var scope = app.Services.CreateScope())
 {
-    using (var scope = app.Services.CreateScope())
+    var services = scope.ServiceProvider;
+    var baseFactory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
+
+    using var migrationContext = dbProvider.CreateMigrationContext(services);
+    // Check for pending model changes
+    var migrator = migrationContext.Database.GetService<IMigrator>();
+    if (migrator.HasPendingModelChanges())
     {
-        var services = scope.ServiceProvider;
-        var baseFactory = services.GetRequiredService<IDbContextFactory<BlazorWebAppMoviesContext>>();
+        Console.WriteLine("");
+        Console.WriteLine("⚠️  ╔══════════════════════════════════════════════════╗");
+        Console.WriteLine("⚠️  ║  Model has pending changes!                      ║");
+        Console.WriteLine("⚠️  ║  Run: dotnet ef migrations add <description>     ║");
+        Console.WriteLine("⚠️  ╚══════════════════════════════════════════════════╝");
+        Console.WriteLine("");
+    }
+    migrationContext.Database.Migrate();
 
-        using var migrationContext = dbProvider.CreateMigrationContext(services);
-        migrationContext.Database.Migrate();
-
+    if (app.Environment.IsDevelopment())
+    {
         SeedData.Initialize(baseFactory, services).GetAwaiter().GetResult();
     }
 }
+
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -138,8 +182,40 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.UseAntiforgery();
+app.UseStaticFiles();
+
+// ── Request logging middleware (after auth so User is populated) ──
+
+PathString api = new PathString("/api");
+PathString classicApi = new PathString("/classic");
+
+app.Use(async (context, next) =>
+{
+    var path = context.Request.Path;
+    var method = context.Request.Method;
+    var identity = context.User.Identity;
+
+
+    bool isAuthenticated = identity?.IsAuthenticated == true;
+    var auth = isAuthenticated ? "authenticated" : "anonymous";
+    var user = isAuthenticated ? (identity?.Name ?? "(none)") : "(none)";
+    if (path.StartsWithSegments(api) || path.StartsWithSegments(classicApi))
+    {
+        Console.WriteLine($"[REQ] {method} {path} - {auth}, user: {user}");
+        var stopwatch = Stopwatch.StartNew();
+        await next();
+        stopwatch.Stop();
+        var elapsedMs = stopwatch.Elapsed.TotalMilliseconds;
+        Console.WriteLine($"[RES] {method} {path} - {context.Response.StatusCode} {elapsedMs:F0}ms");
+    }
+    else
+    {
+        await next();
+    }
+});
 
 app.MapStaticAssets();
+app.MapRazorPages();
 app.MapControllers();
 
 app.MapRazorComponents<App>()

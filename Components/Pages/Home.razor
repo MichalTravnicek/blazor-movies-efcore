@@ -20,6 +20,23 @@
                         <a href="usermanagement" class="alert-link">Go to User Management</a>
                     </div>
                 }
+                
+                @if (isUser)
+                {
+                    <div class="alert alert-info" role="alert">
+                        You have user privileges.
+                        <a href="movies" class="alert-link">Go edit movies!</a> ⭐
+                    </div>
+                }
+
+                <div class="card mt-4">
+                    <div class="card-body">
+                        <h5 class="card-title">Choose Your UI</h5>
+                        <p class="card-text">You can switch between the Blazor and Classic UI at any time.</p>
+                        <a href="/movies" class="btn btn-primary me-2">Blazor UI</a>
+                        <a href="/classic/movies" class="btn btn-outline-info">Classic UI (jQuery)</a>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -71,6 +88,7 @@ else
     private AuthenticationState? authState;
     private string? currentUserName;
     private bool isAdmin;
+    private bool isUser;
     private string? errorMessage;
     private string email = "";
     private string password = "";
@@ -86,6 +104,7 @@ else
                 var user = await UserManager.GetUserAsync(authState.User);
                 currentUserName = user?.Name ?? authState.User.Identity.Name;
                 isAdmin = authState.User.IsInRole("Admin");
+                isUser = authState.User.IsInRole("User");
             }
         }
     }

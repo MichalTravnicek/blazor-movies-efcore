@@ -3,25 +3,20 @@
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.AspNetCore.Components.QuickGrid
 @implements IAsyncDisposable
-@inject IDbContextFactory<BlazorWebAppMovies.Data.BlazorWebAppMoviesContext> DbFactory
+@inject IDbContextFactory<BlazorWebAppMoviesContext> DbFactory
 
 <PageTitle>Index</PageTitle>
 
-<h1>Index</h1>
-
-<div>
-    <input type="search" @bind="titleFilter" @bind:event="oninput" />
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <input type="search" class="form-control form-control-sm w-auto" @bind="titleFilter" @bind:event="oninput" placeholder="Search by title..." />
+    @if (authState?.User.Identity?.IsAuthenticated == true)
+    {
+        <a href="movies/create" class="btn btn-primary btn-sm">+ Create New</a>
+    }
 </div>
 
-@if (authState?.User.Identity?.IsAuthenticated == true)
-{
-    <p>
-        <a href="movies/create">Create New</a>
-    </p>
-}
-
 <div>
-    <QuickGrid Class="table" Items="FilteredMovies" Pagination="pagination">
+    <QuickGrid Class="table table-striped table-hover" Items="FilteredMovies" Pagination="pagination">
         <PropertyColumn Property="movie => movie.Title" Sortable="true" />
         <PropertyColumn Property="movie => movie.ReleaseDate" Title="Release Date" />
         <PropertyColumn Property="movie => movie.Genre" />
@@ -29,16 +24,17 @@
         <PropertyColumn Property="movie => movie.Rating" />
 
         <TemplateColumn Context="movie">
-            @if (authState?.User.Identity?.IsAuthenticated == true)
-            {
-                <a href="@($"movies/edit?id={movie.Id}")">Edit</a> @(" | ")
-            }
-            <a href="@($"movies/details?id={movie.Id}")">Details</a>
-            @if (authState?.User.Identity?.IsAuthenticated == true)
-            {
-                @(" | ")
-                <a href="@($"movies/delete?id={movie.Id}")">Delete</a>
-            }
+            <div class="d-flex gap-1">
+                @if (authState?.User.Identity?.IsAuthenticated == true)
+                {
+                    <a href="@($"movies/edit?id={movie.Id}")" class="btn btn-sm btn-warning">Edit</a>
+                }
+                <a href="@($"movies/details?id={movie.Id}")" class="btn btn-sm btn-info">Details</a>
+                @if (authState?.User.Identity?.IsAuthenticated == true)
+                {
+                    <a href="@($"movies/delete?id={movie.Id}")" class="btn btn-sm btn-outline-danger">Delete</a>
+                }
+            </div>
         </TemplateColumn>
     </QuickGrid>
 </div>
