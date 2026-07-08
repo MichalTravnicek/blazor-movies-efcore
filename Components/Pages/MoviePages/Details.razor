@@ -1,7 +1,6 @@
 @page "/movies/details"
 @using Microsoft.EntityFrameworkCore
-@using BlazorWebAppMovies.Models
-@inject IDbContextFactory<BlazorWebAppMovies.Data.BlazorWebAppMoviesContext> DbFactory
+@inject IDbContextFactory<BlazorWebAppMoviesContext> DbFactory
 @inject NavigationManager NavigationManager
 
 <PageTitle>Details</PageTitle>
@@ -9,44 +8,43 @@
 <h1>Details</h1>
 
 <div>
-    <h2>Movie</h2>
     <hr />
-    @if (movie is null)
+    @if (_movie is null)
     {
         <p><em>Loading...</em></p>
     }
     else {
         <dl class="row">
             <dt class="col-sm-2">Title</dt>
-            <dd class="col-sm-10">@movie.Title</dd>
+            <dd class="col-sm-10">@_movie.Title</dd>
             <dt class="col-sm-2">Release Date</dt>
-            <dd class="col-sm-10">@movie.ReleaseDate</dd>
+            <dd class="col-sm-10">@_movie.ReleaseDate</dd>
             <dt class="col-sm-2">Genre</dt>
-            <dd class="col-sm-10">@movie.Genre</dd>
+            <dd class="col-sm-10">@_movie.Genre</dd>
             <dt class="col-sm-2">Price</dt>
-            <dd class="col-sm-10">@movie.Price</dd>
+            <dd class="col-sm-10">@_movie.Price</dd>
             <dt class="col-sm-2">Rating</dt>
-            <dd class="col-sm-10">@movie.Rating</dd>
+            <dd class="col-sm-10">@_movie.Rating</dd>
         </dl>
-        <div>
-            <a href="@($"/movies/edit?id={movie.Id}")">Edit</a> |
-            <a href="@($"/movies")">Back to List</a>
+        <div class="d-flex gap-1">
+            <a href="@($"/movies/edit?id={_movie.Id}")" class="btn btn-warning btn-sm">Edit</a>
+            <a href="@($"/movies")" class="btn btn-outline-secondary btn-sm">Back to List</a>
         </div>
     }
 </div>
 
 @code {
-    private Movie? movie;
+    private Movie? _movie;
 
     [SupplyParameterFromQuery]
     private int Id { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
-        using var context = DbFactory.CreateDbContext();
-        movie = await context.Movie.FirstOrDefaultAsync(m => m.Id == Id);
+        await using var context = await DbFactory.CreateDbContextAsync();
+        _movie = await context.Movie.FirstOrDefaultAsync(m => m.Id == Id);
 
-        if (movie is null)
+        if (_movie is null)
         {
             NavigationManager.NavigateTo("notfound");
         }

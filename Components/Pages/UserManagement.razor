@@ -2,7 +2,6 @@
 @rendermode InteractiveServer
 @attribute [Authorize(Roles = "Admin")]
 @inject UserManager<User> UserManager
-@inject NavigationManager Navigation
 
 <PageTitle>User Management</PageTitle>
 
@@ -107,6 +106,14 @@ else
                             }
                         </td>
                         <td>
+                            <button class="btn btn-sm btn-warning me-1"
+                                    @onclick="() => ShowEditUser(vm)">
+                                Edit
+                            </button>
+                            <button class="btn btn-sm btn-outline-info me-1"
+                                    @onclick="() => ShowChangePassword(vm.Id)">
+                                Password
+                            </button>
                             @if (!vm.IsAdmin || vm.Id != currentUserId)
                             {
                                 <button class="btn btn-sm btn-outline-danger"
@@ -120,6 +127,79 @@ else
             }
         </tbody>
     </table>
+}
+
+@if (showEditForm)
+{
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Edit User</h5>
+        </div>
+        <div class="card-body">
+            <EditForm Model="@editUser" OnValidSubmit="HandleEditUser">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Name</label>
+                        <InputText class="form-control" @bind-Value="editUser.Name" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Email</label>
+                        <InputText class="form-control" @bind-Value="editUser.Email" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Role</label>
+                        <select class="form-select" @bind="editUser.Role">
+                            <option value="User">User</option>
+                            <option value="Admin">Admin</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button type="submit" class="btn btn-primary me-2" disabled="@isSubmitting">
+                        @if (isSubmitting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Save Changes
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="() => showEditForm = false">Cancel</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@if (showChangePasswordForm)
+{
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Change Password</h5>
+        </div>
+        <div class="card-body">
+            <EditForm Model="@changePasswordModel" OnValidSubmit="HandleChangePassword">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">New Password</label>
+                        <InputText type="password" class="form-control" @bind-Value="changePasswordModel.NewPassword" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Confirm Password</label>
+                        <InputText type="password" class="form-control" @bind-Value="changePasswordModel.ConfirmPassword" />
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button type="submit" class="btn btn-primary me-2" disabled="@isSubmitting">
+                        @if (isSubmitting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Change Password
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="() => showChangePasswordForm = false">Cancel</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
 }
 
 @if (showDeleteConfirm)
@@ -151,6 +231,8 @@ else
     private List<UserViewModel>? userViewModels;
     private bool isLoading = true;
     private bool showCreateForm;
+    private bool showEditForm;
+    private bool showChangePasswordForm;
     private bool isSubmitting;
     private bool showDeleteConfirm;
     private string? deleteTargetId;
@@ -159,6 +241,9 @@ else
     private string? errorMessage;
     private string? currentUserId;
     private readonly NewUserModel newUser = new();
+    private readonly EditUserModel editUser = new();
+    private readonly ChangePasswordModel changePasswordModel = new();
+    private string? editUserId;
 
     private class NewUserModel
     {
@@ -166,6 +251,19 @@ else
         public string Email { get; set; } = "";
         public string Password { get; set; } = "";
         public string Role { get; set; } = "User";
+    }
+
+    private class EditUserModel
+    {
+        public string Name { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Role { get; set; } = "User";
+    }
+
+    private class ChangePasswordModel
+    {
+        public string NewPassword { get; set; } = "";
+        public string ConfirmPassword { get; set; } = "";
     }
 
     private class UserViewModel
@@ -220,10 +318,123 @@ else
     private void ShowCreateUser()
     {
         showCreateForm = true;
+        showEditForm = false;
+        showChangePasswordForm = false;
         newUser.Name = "";
         newUser.Email = "";
         newUser.Password = "";
         newUser.Role = "User";
+    }
+
+    private void ShowEditUser(UserViewModel vm)
+    {
+        showEditForm = true;
+        showCreateForm = false;
+        showChangePasswordForm = false;
+        editUserId = vm.Id;
+        editUser.Name = vm.Name;
+        editUser.Email = vm.Email;
+        editUser.Role = vm.IsAdmin ? "Admin" : "User";
+    }
+
+    private async Task HandleEditUser()
+    {
+        isSubmitting = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var user = await UserManager.FindByIdAsync(editUserId!);
+            if (user is null)
+            {
+                errorMessage = "User not found.";
+                return;
+            }
+
+            user.Name = editUser.Name;
+            user.Email = editUser.Email;
+            user.UserName = editUser.Email;
+
+            var updateResult = await UserManager.UpdateAsync(user);
+            if (!updateResult.Succeeded)
+            {
+                errorMessage = string.Join("; ", updateResult.Errors.Select(e => e.Description));
+                return;
+            }
+
+            var currentRoles = await UserManager.GetRolesAsync(user);
+            var newRole = editUser.Role;
+            if (!currentRoles.Contains(newRole))
+            {
+                await UserManager.RemoveFromRolesAsync(user, currentRoles);
+                await UserManager.AddToRoleAsync(user, newRole);
+            }
+
+            successMessage = $"User '{editUser.Name}' updated.";
+            showEditForm = false;
+            await LoadUsers();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error updating user: {ex.Message}";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void ShowChangePassword(string userId)
+    {
+        showChangePasswordForm = true;
+        showCreateForm = false;
+        showEditForm = false;
+        editUserId = userId;
+        changePasswordModel.NewPassword = "";
+        changePasswordModel.ConfirmPassword = "";
+    }
+
+    private async Task HandleChangePassword()
+    {
+        isSubmitting = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            if (changePasswordModel.NewPassword != changePasswordModel.ConfirmPassword)
+            {
+                errorMessage = "Passwords do not match.";
+                return;
+            }
+
+            var user = await UserManager.FindByIdAsync(editUserId!);
+            if (user is null)
+            {
+                errorMessage = "User not found.";
+                return;
+            }
+
+            var resetToken = await UserManager.GeneratePasswordResetTokenAsync(user);
+            var result = await UserManager.ResetPasswordAsync(user, resetToken, changePasswordModel.NewPassword);
+            if (!result.Succeeded)
+            {
+                errorMessage = string.Join("; ", result.Errors.Select(e => e.Description));
+                return;
+            }
+
+            successMessage = "Password changed successfully.";
+            showChangePasswordForm = false;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error changing password: {ex.Message}";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
     }
 
     private async Task HandleCreateUser()

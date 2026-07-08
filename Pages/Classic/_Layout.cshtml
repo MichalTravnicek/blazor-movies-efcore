@@ -1,0 +1,163 @@
+@{
+    var uiPref = Context.Request.Cookies["ui_preference"];
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] — Classic Movies</title>
+    <base href="/" />
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/lib/datatables/dataTables.bootstrap5.min.css" />
+    <link rel="stylesheet" href="~/app.css" />
+</head>
+<body class="bg-light"
+      data-auth="@(User.Identity?.IsAuthenticated == true ? "true" : "false")"
+      data-user="@(User.Identity?.Name ?? "")">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="/classic/movies">Sci-fi Movies (Classic UI)</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#classicNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="classicNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/classic/movies">Movies</a>
+                    </li>
+                    @if (User.Identity?.IsAuthenticated == true && User.IsInRole("Admin"))
+                    {
+                        <li class="nav-item">
+                            <a class="nav-link" href="/classic/users">Users</a>
+                        </li>
+                    }
+                </ul>
+                <ul class="navbar-nav">
+                    @if (User.Identity?.IsAuthenticated == true)
+                    {
+                        <li class="nav-item">
+                            <span class="nav-link text-light">Hello, @User.Identity.Name!</span>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="javascript:void(0)" onclick="logout()">Logout</a>
+                        </li>
+                    }
+                    else
+                    {
+                        <li class="nav-item">
+                            <a class="nav-link" href="javascript:void(0)" onclick="showLoginModal()">Sign In</a>
+                        </li>
+                    }
+                    <li class="nav-item ms-2">
+                        <a class="nav-link btn btn-outline-info btn-sm text-info" href="/" onclick="switchToBlazor(event)">
+                            Switch to Blazor UI
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    @* ─── Login Modal ─── *@
+    <div class="modal fade" id="loginModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Sign In</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="loginError" class="alert alert-danger d-none"></div>
+                    <form id="loginForm">
+                        <div class="mb-3">
+                            <label for="loginEmail" class="form-label">Email</label>
+                            <input type="email" id="loginEmail" class="form-control" placeholder="Enter your email" required />
+                        </div>
+                        <div class="mb-3">
+                            <label for="loginPassword" class="form-label">Password</label>
+                            <input type="password" id="loginPassword" class="form-control" placeholder="Enter your password" required />
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100" id="loginBtn">
+                            <span id="loginBtnText">Sign In</span>
+                            <span id="loginSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        @RenderBody()
+    </div>
+
+    <script src="~/lib/jquery/jquery.min.js"></script>
+    <script src="~/lib/datatables/dataTables.min.js"></script>
+    <script src="~/lib/datatables/dataTables.bootstrap5.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        var auth = document.body.getAttribute("data-auth") === "true";
+        var user = document.body.getAttribute("data-user") || "";
+        window.__classicAuth = { isAuthenticated: auth };
+        window.__classicUserName = user;
+        console.log("[classic] Auth state:", window.__classicAuth, "user:", user);
+    </script>
+    <script src="~/js/classic-movies.js?v=3"></script>
+    <script src="~/js/classic-users.js?v=3"></script>
+    <script>
+        function switchToBlazor(e) {
+            e.preventDefault();
+            document.cookie = "ui_preference=blazor; path=/; max-age=" + (30 * 24 * 60 * 60);
+            window.location.href = "/";
+        }
+        function logout() {
+            fetch("/api/auth/logout", { method: "POST" }).finally(function () {
+                window.location.href = "/classic/movies";
+            });
+        }
+        function showLoginModal() {
+            $("#loginError").addClass("d-none").text("");
+            $("#loginForm")[0].reset();
+            $("#loginModal").modal("show");
+        }
+        $(document).ready(function () {
+            $("#loginForm").on("submit", function (e) {
+                e.preventDefault();
+                var form = this;
+                if (!form.checkValidity()) {
+                    form.classList.add("was-validated");
+                    return;
+                }
+                $("#loginBtn").prop("disabled", true);
+                $("#loginBtnText").text("Signing in...");
+                $("#loginSpinner").removeClass("d-none");
+                $("#loginError").addClass("d-none").text("");
+                $.ajax({
+                    url: "/api/auth/login",
+                    method: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({
+                        email: $("#loginEmail").val(),
+                        password: $("#loginPassword").val()
+                    }),
+                    success: function () {
+                        window.location.reload();
+                    },
+                    error: function (xhr) {
+                        var msg = "Invalid credentials.";
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            msg = xhr.responseJSON.message;
+                        }
+                        $("#loginError").removeClass("d-none").text(msg);
+                        $("#loginBtn").prop("disabled", false);
+                        $("#loginBtnText").text("Sign In");
+                        $("#loginSpinner").addClass("d-none");
+                    }
+                });
+            });
+        });
+    </script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

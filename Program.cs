@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using BlazorWebAppMovies.Components;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -12,6 +13,12 @@ using BlazorWebAppMovies;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.OpenApi.Models;
+
+
+
+
+// ── Suppress noisy EF Core SQL logs ──
+AppContext.SetSwitch("Microsoft.EntityFrameworkCore.Issue21997", true);
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -64,6 +71,7 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddAuthorization();
 builder.Services.AddCascadingAuthenticationState();
 
+builder.Services.AddRazorPages();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -121,8 +129,12 @@ builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-var app = builder.Build();
+// ── Suppress EF Core SQL logs in console ──
+builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
+builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Query", LogLevel.Warning);
+builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Infrastructure", LogLevel.Warning);
 
+var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
@@ -170,8 +182,40 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.UseAntiforgery();
+app.UseStaticFiles();
+
+// ── Request logging middleware (after auth so User is populated) ──
+
+PathString api = new PathString("/api");
+PathString classicApi = new PathString("/classic");
+
+app.Use(async (context, next) =>
+{
+    var path = context.Request.Path;
+    var method = context.Request.Method;
+    var identity = context.User.Identity;
+
+
+    bool isAuthenticated = identity?.IsAuthenticated == true;
+    var auth = isAuthenticated ? "authenticated" : "anonymous";
+    var user = isAuthenticated ? (identity?.Name ?? "(none)") : "(none)";
+    if (path.StartsWithSegments(api) || path.StartsWithSegments(classicApi))
+    {
+        Console.WriteLine($"[REQ] {method} {path} - {auth}, user: {user}");
+        var stopwatch = Stopwatch.StartNew();
+        await next();
+        stopwatch.Stop();
+        var elapsedMs = stopwatch.Elapsed.TotalMilliseconds;
+        Console.WriteLine($"[RES] {method} {path} - {context.Response.StatusCode} {elapsedMs:F0}ms");
+    }
+    else
+    {
+        await next();
+    }
+});
 
 app.MapStaticAssets();
+app.MapRazorPages();
 app.MapControllers();
 
 app.MapRazorComponents<App>()

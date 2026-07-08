@@ -50,7 +50,7 @@ start temp/coverage-report/summary.html
 
 ---
 
-## Aktuální stav (2026-07-07)
+## Aktuální stav (2026-07-08)
 
 ### Celkové statistiky
 
@@ -61,8 +61,10 @@ start temp/coverage-report/summary.html
 | **Method coverage** | 39.2% |
 | **Covered lines** | 283 z 2 416 |
 | **Assemblies** | 1 |
+| **Total tests** | **245** |
 
 > ⚠️ Celkové % je zkreslené — Blazor UI komponenty (Razor Pages) nejsou testovány jednotkovými testy a mají 0% coverage.
+> Blazor UI testy (51 testů v `BlazorUiTests/`) ověřují logiku CRUD operací, auth guardů a user managementu na úrovni service layer, nikoliv renderování .razor komponent.
 
 ---
 
@@ -107,6 +109,9 @@ start temp/coverage-report/summary.html
 |---|---|
 | AuthController | 17 testů |
 | MoviesController | 29 testů |
+| AdminController | 17 testů |
+| Classic UI Pages | 23 testů |
+| Blazor UI (service layer) | 51 testů |
 | Entity modely (Movie, User) | ~70 DB testů |
 | DTO validace | 16 testů |
 | AutoMapper profil | 11 testů |
@@ -115,7 +120,8 @@ start temp/coverage-report/summary.html
 
 | Třída | Proč není pokryto | Jak testovat |
 |---|---|---|
-| **Blazor Pages** | UI testy — jednotkově netestovatelné | Playwright / bUnit / E2E |
+| **Blazor Pages** | UI testy — jednotkově netestovatelné | bUnit (render testy) / Playwright E2E |
+| **Classic UI Pages** | Silně závislé na HttpContext, UserManager | Rozšířit stávající page model testy |
 | **Program.cs** | Startup konfigurace | `WebApplicationFactory` (integrační testy) |
 | **Swagger filtry** | Kosmetika, nízká priorita | Jednotkový test s `SchemaFilterContext` |
 | **DbContextProvider** | Logika výběru providera | Chybí testy pro SQL Server větev |
@@ -131,13 +137,15 @@ start temp/coverage-report/summary.html
 |---|---|---|
 | Přidat testy pro `DbContextProvider` (SQL Server větev) | ~15 min | +~10% u Data vrstvy |
 | Přidat integrační test pro `Program.cs` | ~30 min | 0% → ~60% u Program.cs |
+| bUnit render testy pro Blazor komponenty | ~1h | 0% → ~20% u UI |
 
 ### Dlouhodobě (vyšší úsilí)
 
 | Co | Odhad | Zvýšení |
 |---|---|---|
-| bUnit testy pro Blazor komponenty | ~2-3h | 0% → ~50% u UI |
+| bUnit testy pro všechny Blazor komponenty | ~2-3h | 0% → ~50% u UI |
 | E2E testy (Playwright) | ~4h | 0% → ~30% u UI |
+| Integrační testy s `WebApplicationFactory` | ~2h | 0% → ~70% u Program.cs |
 
 ---
 

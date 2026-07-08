@@ -217,6 +217,31 @@ New users can register via the API endpoint (`POST /api/auth/register`) but
 there is no self-service sign-up UI. User accounts must be created by an admin
 through the User Management page.
 
+### Classic UI (jQuery)
+
+The app also provides a **Classic UI** built with Razor Pages + jQuery + DataTables.
+It shares the same API controllers, JWT auth, and database as the Blazor UI.
+
+| Feature | Classic UI URL |
+|---|---|
+| Movies (public) | `/classic/movies` |
+| User Management (admin only) | `/classic/users` |
+
+Switch between UIs using the nav link in the Classic UI, or the "Choose Your UI"
+card on the Blazor Home page. Your preference is stored in a cookie.
+
+## Test Suite
+
+The project contains **245 unit tests** across multiple test categories:
+
+| Category | Tests | What it covers |
+|---|---|---|
+| Controllers | 63 | `AuthController`, `MoviesController`, `AdminController` |
+| Classic UI Pages | 23 | Page model data binding, auth state, JSON serialization |
+| Blazor UI (service layer) | 51 | Movie CRUD, user management, auth flow, role guards |
+| Database / Models | ~70 | Entity validation, queries, context, seed data |
+| DTOs / Mapping | 27 | DTO validation, AutoMapper profiles |
+
 ### How authentication works
 
 1. The login form on the Home page calls the JavaScript `authService.login()` function
@@ -294,3 +319,4 @@ AutoMapper is registered as a singleton in `Program.cs` with `AssertConfiguratio
 ### Swagger
 
 The API is documented via Swagger UI at `/swagger` (development-only). JWT bearer authentication is configured in Swagger — click the **Authorize** button and enter your JWT token to test protected endpoints.
+When logged in web UI authenticated access of Swagger works out of the box.
