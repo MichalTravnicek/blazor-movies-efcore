@@ -367,8 +367,20 @@ else
             var newRole = editUser.Role;
             if (!currentRoles.Contains(newRole))
             {
-                await UserManager.RemoveFromRolesAsync(user, currentRoles);
-                await UserManager.AddToRoleAsync(user, newRole);
+                var removeResult = await UserManager.RemoveFromRolesAsync(user, currentRoles);
+                if (!removeResult.Succeeded)
+                {
+                    errorMessage = string.Join("; ", removeResult.Errors.Select(e => e.Description));
+                    return;
+                }
+
+                var addResult = await UserManager.AddToRoleAsync(user, newRole);
+                if (!addResult.Succeeded)
+                {
+                    await UserManager.AddToRolesAsync(user, currentRoles);
+                    errorMessage = string.Join("; ", addResult.Errors.Select(e => e.Description));
+                    return;
+                }
             }
 
             successMessage = $"User '{editUser.Name}' updated.";

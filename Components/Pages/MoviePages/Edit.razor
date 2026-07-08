@@ -44,7 +44,14 @@ else
                 </div>
                 <div class="mb-3">
                     <label for="rating" class="form-label">Rating:</label>
-                    <InputText id="rating" @bind-Value="Movie.Rating" class="form-control" />
+                    <select id="rating" class="form-select" @bind="Movie.Rating">
+                        <option value="">Select rating...</option>
+                        <option value="G">G</option>
+                        <option value="PG">PG</option>
+                        <option value="PG-13">PG-13</option>
+                        <option value="R">R</option>
+                        <option value="NC-17">NC-17</option>
+                    </select>
                     <ValidationMessage For="() => Movie.Rating" class="text-danger" />
                 </div>
                 @if (!string.IsNullOrEmpty(errorMessage))
@@ -90,7 +97,7 @@ else
 
             if (movie is null)
             {
-                NavigationManager.NavigateTo("notfound");
+                NavigationManager.NavigateTo("/notfound");
                 return;
             }
 
@@ -103,9 +110,13 @@ else
                 Rating = movie.Rating
             };
         }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            NavigationManager.NavigateTo("/notfound");
+        }
         catch
         {
-            NavigationManager.NavigateTo("notfound");
+            // Stay on page — Movie stays null, UI shows "Movie not found."
         }
         finally
         {
@@ -134,7 +145,7 @@ else
             }
             else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                NavigationManager.NavigateTo("notfound");
+                NavigationManager.NavigateTo("/notfound");
             }
             else
             {
@@ -151,8 +162,4 @@ else
         }
     }
 
-    private class ErrorResponse
-    {
-        public string? Message { get; set; }
-    }
 }

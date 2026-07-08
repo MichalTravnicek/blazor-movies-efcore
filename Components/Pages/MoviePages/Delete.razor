@@ -70,12 +70,16 @@
 
             if (_movie is null)
             {
-                NavigationManager.NavigateTo("notfound");
+                NavigationManager.NavigateTo("/notfound");
             }
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            NavigationManager.NavigateTo("/notfound");
         }
         catch
         {
-            NavigationManager.NavigateTo("notfound");
+            // Stay on page — _movie stays null, UI shows "Movie not found."
         }
         finally
         {

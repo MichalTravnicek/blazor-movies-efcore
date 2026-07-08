@@ -43,7 +43,7 @@ public class AuthCookieHandler : DelegatingHandler
             var authCookie = httpContext.Request.Cookies["auth_token"];
             if (!string.IsNullOrEmpty(authCookie))
             {
-                request.Headers.Add("Cookie", $"auth_token={authCookie}");
+                request.Headers.Add("Cookie", $"auth_token={Uri.EscapeDataString(authCookie)}");
             }
         }
 
