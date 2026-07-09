@@ -163,6 +163,6 @@
 
 <script>
     window.__currentUserId = "@(Model.CurrentUserId ?? "")";
+    window.__canDeleteUsers = @(Model.CanDeleteUsers ? "true" : "false");
     window.__usersData = @Html.Raw(Model.UsersJson ?? "[]");
-    console.log("[classic] User management page initialized, userId:", window.__currentUserId, "users:", Array.isArray(window.__usersData) ? window.__usersData.length : "NOT AN ARRAY", window.__usersData);
 </script>

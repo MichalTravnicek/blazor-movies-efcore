@@ -15,6 +15,11 @@ public class MovieDbContextTests
         return new BlazorWebAppMoviesContext(options);
     }
 
+    private static void SeedRatings(BlazorWebAppMoviesContext context)
+    {
+        SeedData.SeedRatings(context);
+    }
+
     [Fact]
     public void CanCreateDatabaseContext()
     {
@@ -33,6 +38,7 @@ public class MovieDbContextTests
     public async Task CanAddMovieToDatabase()
     {
         using var context = CreateDbContext();
+        SeedRatings(context);
 
         var movie = new Movie
         {
@@ -40,7 +46,7 @@ public class MovieDbContextTests
             ReleaseDate = new DateOnly(2024, 1, 1),
             Genre = "Action",
             Price = 9.99m,
-            Rating = "PG-13"
+            MovieRatingId = context.MovieRating.First(r => r.Code == "PG-13").Id
         };
 
         context.Movie.Add(movie);
@@ -56,6 +62,7 @@ public class MovieDbContextTests
     public async Task CanUpdateMovie()
     {
         using var context = CreateDbContext();
+        SeedRatings(context);
 
         var movie = new Movie
         {
@@ -63,7 +70,7 @@ public class MovieDbContextTests
             ReleaseDate = new DateOnly(2024, 6, 15),
             Genre = "Comedy",
             Price = 5.99m,
-            Rating = "R"
+            MovieRatingId = context.MovieRating.First(r => r.Code == "R").Id
         };
 
         context.Movie.Add(movie);
@@ -83,6 +90,7 @@ public class MovieDbContextTests
     public async Task CanDeleteMovie()
     {
         using var context = CreateDbContext();
+        SeedRatings(context);
 
         var movie = new Movie
         {
@@ -90,7 +98,7 @@ public class MovieDbContextTests
             ReleaseDate = new DateOnly(2023, 12, 1),
             Genre = "Drama",
             Price = 3.50m,
-            Rating = "PG"
+            MovieRatingId = context.MovieRating.First(r => r.Code == "PG").Id
         };
 
         context.Movie.Add(movie);
@@ -107,11 +115,14 @@ public class MovieDbContextTests
     public async Task CanQueryMoviesByGenre()
     {
         using var context = CreateDbContext();
+        SeedRatings(context);
+        var pg13Id = context.MovieRating.First(r => r.Code == "PG-13").Id;
+        var rId = context.MovieRating.First(r => r.Code == "R").Id;
 
         context.Movie.AddRange(
-            new Movie { Title = "Movie A", ReleaseDate = new DateOnly(2020, 1, 1), Genre = "Action", Price = 10m, Rating = "PG-13" },
-            new Movie { Title = "Movie B", ReleaseDate = new DateOnly(2021, 1, 1), Genre = "Comedy", Price = 8m, Rating = "R" },
-            new Movie { Title = "Movie C", ReleaseDate = new DateOnly(2022, 1, 1), Genre = "Action", Price = 12m, Rating = "PG-13" }
+            new Movie { Title = "Movie A", ReleaseDate = new DateOnly(2020, 1, 1), Genre = "Action", Price = 10m, MovieRatingId = pg13Id },
+            new Movie { Title = "Movie B", ReleaseDate = new DateOnly(2021, 1, 1), Genre = "Comedy", Price = 8m, MovieRatingId = rId },
+            new Movie { Title = "Movie C", ReleaseDate = new DateOnly(2022, 1, 1), Genre = "Action", Price = 12m, MovieRatingId = pg13Id }
         );
         await context.SaveChangesAsync();
 
@@ -125,11 +136,15 @@ public class MovieDbContextTests
     public async Task CanQueryMoviesByPriceRange()
     {
         using var context = CreateDbContext();
+        SeedRatings(context);
+        var pgId = context.MovieRating.First(r => r.Code == "PG").Id;
+        var rId = context.MovieRating.First(r => r.Code == "R").Id;
+        var pg13Id = context.MovieRating.First(r => r.Code == "PG-13").Id;
 
         context.Movie.AddRange(
-            new Movie { Title = "Cheap", ReleaseDate = new DateOnly(2020, 1, 1), Genre = "Action", Price = 5m, Rating = "PG" },
-            new Movie { Title = "Mid", ReleaseDate = new DateOnly(2021, 1, 1), Genre = "Drama", Price = 15m, Rating = "R" },
-            new Movie { Title = "Expensive", ReleaseDate = new DateOnly(2022, 1, 1), Genre = "Action", Price = 50m, Rating = "PG-13" }
+            new Movie { Title = "Cheap", ReleaseDate = new DateOnly(2020, 1, 1), Genre = "Action", Price = 5m, MovieRatingId = pgId },
+            new Movie { Title = "Mid", ReleaseDate = new DateOnly(2021, 1, 1), Genre = "Drama", Price = 15m, MovieRatingId = rId },
+            new Movie { Title = "Expensive", ReleaseDate = new DateOnly(2022, 1, 1), Genre = "Action", Price = 50m, MovieRatingId = pg13Id }
         );
         await context.SaveChangesAsync();
 
@@ -144,11 +159,13 @@ public class MovieDbContextTests
     public async Task DuplicateMovieTitle_ThrowsDbUpdateException()
     {
         using var context = CreateDbContext();
+        SeedRatings(context);
+        var pgId = context.MovieRating.First(r => r.Code == "PG").Id;
 
         context.Movie.Add(new Movie
         {
             Title = "Unique", ReleaseDate = new DateOnly(2024, 1, 1),
-            Genre = "Action", Price = 10m, Rating = "PG"
+            Genre = "Action", Price = 10m, MovieRatingId = pgId
         });
         await context.SaveChangesAsync();
 
@@ -157,7 +174,7 @@ public class MovieDbContextTests
         context.Movie.Add(new Movie
         {
             Title = "Unique", ReleaseDate = new DateOnly(2024, 1, 1),
-            Genre = "Action", Price = 10m, Rating = "PG"
+            Genre = "Action", Price = 10m, MovieRatingId = pgId
         });
         await context.SaveChangesAsync();
 
@@ -166,11 +183,12 @@ public class MovieDbContextTests
     }
 
     [Fact]
-    public async Task UniqueIndexOnTitle_IsDefinedInModel()
+    public void UniqueIndexOnTitle_IsDefinedInModel()
     {
         using var context = CreateDbContext();
 
         var entityType = context.Model.FindEntityType(typeof(Movie));
+
         Assert.NotNull(entityType);
 
         var index = entityType.GetIndexes()
@@ -184,6 +202,7 @@ public class MovieDbContextTests
     public async Task MovieHasIdAfterSave()
     {
         using var context = CreateDbContext();
+        SeedRatings(context);
 
         var movie = new Movie
         {
@@ -191,7 +210,7 @@ public class MovieDbContextTests
             ReleaseDate = new DateOnly(2024, 5, 5),
             Genre = "Thriller",
             Price = 14.99m,
-            Rating = "R"
+            MovieRatingId = context.MovieRating.First(r => r.Code == "R").Id
         };
 
         context.Movie.Add(movie);

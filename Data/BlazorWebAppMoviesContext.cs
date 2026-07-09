@@ -8,6 +8,8 @@ public class BlazorWebAppMoviesContext(DbContextOptions<BlazorWebAppMoviesContex
 {
     public DbSet<Movie> Movie { get; set; } = default!;
 
+    public DbSet<MovieRating> MovieRating { get; set; } = default!;
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -15,5 +17,13 @@ public class BlazorWebAppMoviesContext(DbContextOptions<BlazorWebAppMoviesContex
         builder.Entity<Movie>()
             .HasIndex(m => m.Title)
             .IsUnique();
+
+        builder.Entity<Movie>()
+            .HasOne(m => m.MovieRating)
+            .WithMany(r => r.Movies)
+            .HasForeignKey(m => m.MovieRatingId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+
     }
 }

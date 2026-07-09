@@ -26,6 +26,18 @@
     <Compile Remove="BlazorWebAppMovies.Tests\**\*" />
     <EmbeddedResource Remove="BlazorWebAppMovies.Tests\**\*" />
     <None Remove="BlazorWebAppMovies.Tests\**\*" />
+    <Content Remove="BlazorWebAppMovies.Tests\**\*" />
   </ItemGroup>
+
+  <PropertyGroup>
+    <!-- Main language of application -->
+    <NeutralLanguage>en</NeutralLanguage>
+    <!-- Dont build for other languages -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+    <!-- If Windows is current platform build only Windows binaries -->
+  <PropertyGroup Condition="$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  </PropertyGroup>
 
 </Project>

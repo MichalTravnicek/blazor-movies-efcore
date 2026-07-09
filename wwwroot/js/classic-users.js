@@ -50,7 +50,7 @@
             '<button class="btn btn-sm btn-outline-info me-1 change-password-btn" data-user-id="' +
             row.id +
             '">Password</button>';
-          if (row.id !== window.__currentUserId) {
+          if (window.__canDeleteUsers && row.id !== window.__currentUserId) {
             btns +=
               '<button class="btn btn-sm btn-outline-danger delete-user-btn" data-user-id="' +
               row.id +
@@ -68,6 +68,14 @@
     },
   });
 
+  function reloadUsersTable() {
+    $.get("/api/admin/users", function (data) {
+      usersTable.clear().rows.add(data).draw();
+    }).fail(function () {
+      showUserToast("Error", "Failed to refresh users.", "error");
+    });
+  }
+
   function saveForm(url, method, data, formId, modalId, successMsg) {
     $.ajax({
       url: url,
@@ -79,7 +87,7 @@
         $(formId)[0].reset();
         $(formId).removeClass("was-validated");
         showUserToast("Success", successMsg, "success");
-        location.reload();
+        reloadUsersTable();
       },
       error: function (xhr) {
         var msg = "Request failed.";
@@ -193,7 +201,7 @@
       success: function () {
         $("#deleteUserModal").modal("hide");
         showUserToast("Success", "User deleted.", "success");
-        location.reload();
+        reloadUsersTable();
       },
       error: function (xhr) {
         var msg = "Failed to delete user.";

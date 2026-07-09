@@ -86,11 +86,11 @@ public class SeedDataTests
         await SeedData.Initialize(factory, services);
 
         using var context = factory.CreateDbContext();
-        var furyRoad = context.Movie.First(m => m.Title == "Mad Max: Fury Road");
+        var furyRoad = context.Movie.Include(m => m.MovieRating).First(m => m.Title == "Mad Max: Fury Road");
 
         Assert.Equal(new DateOnly(2015, 5, 15), furyRoad.ReleaseDate);
         Assert.Equal("Sci-fi (Cyberpunk)", furyRoad.Genre);
         Assert.Equal(8.43m, furyRoad.Price);
-        Assert.Equal("R", furyRoad.Rating);
+        Assert.Equal("R", furyRoad.MovieRating!.Code);
     }
 }

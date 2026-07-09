@@ -17,34 +17,42 @@ The application provides **two parallel user interfaces** — the **Blazor UI** 
 ┌──────────────────────────────────────────────────────────────────┐
 │                      BlazorWebAppMovies                          │
 │                                                                  │
-│  ┌─────────────────────────┐    ┌─────────────────────────────┐  │
-│  │      Blazor UI          │    │        Classic UI           │  │
-│  │  (Interactive Server)   │    │  (Razor Pages + jQuery)     │  │
-│  │                         │    │                             │  │
-│  │  ├── DbContextFactory   │    │      ┌───────────────┐      │  │
-│  │  ├── UserManager        │    │      │  Page Models  │      │  │
-│  │  └── SignalR (client)   │    │      │ (UserManager) │      │  │
-│  └───────────│─────────────┘    │      └───────┬───────┘      │  │
-│              │                  │              │              │  │
-│              │                  │      ┌───────┴───────┐      │  │
-│              │                  │      │  jQuery AJAX  │      │  │
-│              │                  │      └───────┬───────┘      │  │
-│              │                  └──────────────┼──────────────┘  │
-│              │                                 │                 │
-│              │                                 ▼                 │
-│  ┌───────────┴─────────────┐    ┌─────────────────────────┐      │
-│  │       Database          │◄───┤    API Controllers      │      │
-│  │       (SQLite)          │    │  (Movies, Auth, Admin)  │      │
-│  └─────────────────────────┘    └─────────────────────────┘      │
+│  ┌─────────────────────────────┐  ┌───────────────────────────┐  │
+│  │         Blazor UI           │  │       Classic UI          │  │
+│  │    (Interactive Server)     │  │ (Razor Pages + jQuery)    │  │
+│  │                             │  │                           │  │
+│  │  ┌─────────────────────┐    │  │  ┌─────────────────┐      │  │
+│  │  │  Movie Pages        │    │  │  │  Page Models    │      │  │
+│  │  │  (HttpClient) ──────│────│──│──│  (UserManager)  │      │  │
+│  │  └─────────────────────┘    │  │  └────────┬────────┘      │  │
+│  │  ┌─────────────────────┐    │  │           │               │  │
+│  │  │  User Management    │    │  │  ┌────────┴────────┐      │  │
+│  │  │  (UserManager) ─────│────│──│──│  jQuery AJAX    │      │  │
+│  │  └─────────────────────┘    │  │  └────────┬────────┘      │  │
+│  │  ┌─────────────────────┐    │  └───────────┼───────────────┘  │
+│  │  │  Login (JS interop) │    │              │                  │
+│  │  │  (/api/auth/*) ─────│────│──────────────┘                  │
+│  │  └─────────────────────┘    │                                 │
+│  └───────────────│─────────────┘                                 │
+│                  │                                               │
+│                  ▼                                               │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │                   API Controllers                        │    │
+│  │            (Movies, Auth, Admin)                         │    │
+│  └───────────────────────────┬──────────────────────────────┘    │
+│                              │                                   │
+│                              ▼                                   │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │                    Database (SQLite)                     │    │
+│  └──────────────────────────────────────────────────────────┘    │
 └──────────────────────────────────────────────────────────────────┘
-```
 
 **Data flow paths:**
 
 | Path | Description |
 |------|-------------|
-| Blazor UI → DbContextFactory → Database | Movie list, CRUD (via `QuickGrid`) |
-| Blazor UI → UserManager → Database | User management, auth state |
+| Blazor UI → HttpClient → API Controllers → Database | Movie list, CRUD (via `QuickGrid` + API) |
+| Blazor UI → UserManager → Database | User management, auth state (bypasses API) |
 | Blazor UI → JS interop → API Controllers → Database | Login/logout (`/api/auth/*`) |
 | Classic UI → Page Models → UserManager → Database | Users page server-side data |
 | Classic UI → jQuery AJAX → API Controllers → Database | Movies CRUD, user CRUD, login |
@@ -59,7 +67,7 @@ The application provides **two parallel user interfaces** — the **Blazor UI** 
 |--------|--------|
 | **Render mode** | Interactive Server (SignalR) |
 | **Pages** | `.razor` components in `Components/Pages/` |
-| **Data access** | Direct: `DbContextFactory`, `UserManager` |
+| **Data access** | Via API: `IHttpClientFactory` + `AuthCookieHandler` → `/api/movies/*` endpoints |
 | **Auth** | `[Authorize]` attributes, `AuthenticationState` cascading parameter |
 | **Grid** | `QuickGrid` with sorting, pagination, filtering |
 | **URLs** | `/movies`, `/movies/create`, `/movies/edit?id=`, `/movies/details?id=`, `/movies/delete?id=`, `/usermanagement` |
@@ -331,6 +339,21 @@ This avoids issues with DataTables re-rendering rows on pagination/sort.
 ### API (`AdminController.cs`)
 
 The `AdminController` is a `[Authorize(Roles = "Admin")]` API controller with primary constructor. It uses `UserManager<User>` directly and provides all CRUD endpoints.
+
+### Blazor UI
+
+The Blazor movie pages (`Index.razor`, `Create.razor`, `Edit.razor`, `Details.razor`, `Delete.razor`) now use `IHttpClientFactory` to call the REST API instead of accessing the database directly. A named `HttpClient` named `"BlazorApi"` is registered in `Program.cs` with an `AuthCookieHandler` that forwards the `auth_token` cookie from the current HTTP context, so authenticated calls (create/edit/delete) pass through JWT auth. Public GET requests for movie list and details are `[AllowAnonymous]`.
+
+**Flow:**
+
+```
+Blazor Page → IHttpClientFactory.CreateClient("BlazorApi") → AuthCookieHandler
+→ HttpClient → /api/movies/* → MoviesController → Database
+```
+
+The `AuthCookieHandler` is a `DelegatingHandler` in `Components/Handlers/AuthCookieHandler.cs`.
+
+All 245 tests pass, including the 18 `BlazorMoviesPageTests` that now exercise the controller layer via `MoviesController` directly.
 
 ---
 

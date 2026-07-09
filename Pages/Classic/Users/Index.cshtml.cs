@@ -20,11 +20,13 @@ public class IndexModel : PageModel
 
     public string? CurrentUserId { get; set; }
     public string? UsersJson { get; set; }
+    public bool CanDeleteUsers { get; set; }
 
     public async Task OnGet()
     {
         var user = await _userManager.GetUserAsync(User);
         CurrentUserId = user?.Id;
+        CanDeleteUsers = CurrentUserId is not null;
 
         var users = await _userManager.Users.ToListAsync();
         var userDtos = new List<Dictionary<string, object>>();

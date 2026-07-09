@@ -24,6 +24,7 @@ public class MovieProfileTests
     public void Map_MovieToMovieDto_MapsAllProperties()
     {
         var mapper = CreateMapper();
+        var movieRating = new MovieRating { Id = 3, Code = "PG-13", Name = "Parents Strongly Cautioned" };
         var movie = new Movie
         {
             Id = 42,
@@ -31,7 +32,8 @@ public class MovieProfileTests
             Genre = "Sci-Fi",
             Price = 12.99m,
             ReleaseDate = new DateOnly(2010, 7, 16),
-            Rating = "PG-13"
+            MovieRatingId = 3,
+            MovieRating = movieRating
         };
 
         var dto = mapper.Map<MovieDto>(movie);
@@ -41,13 +43,14 @@ public class MovieProfileTests
         Assert.Equal(movie.Genre, dto.Genre);
         Assert.Equal(movie.Price, dto.Price);
         Assert.Equal(movie.ReleaseDate, dto.ReleaseDate);
-        Assert.Equal(movie.Rating, dto.Rating);
+        Assert.Equal("PG-13", dto.Rating);
     }
 
     [Fact]
     public void Map_MovieToMovieDto_HandlesNullTitle()
     {
         var mapper = CreateMapper();
+        var movieRating = new MovieRating { Id = 4, Code = "R", Name = "Restricted" };
         var movie = new Movie
         {
             Id = 1,
@@ -55,7 +58,8 @@ public class MovieProfileTests
             Genre = "Action",
             Price = 9.99m,
             ReleaseDate = new DateOnly(2020, 1, 1),
-            Rating = "R"
+            MovieRatingId = 4,
+            MovieRating = movieRating
         };
 
         // AutoMapper maps null source to null for reference types
@@ -68,10 +72,12 @@ public class MovieProfileTests
     public void Map_MovieListToMovieDtoList_MapsAllItems()
     {
         var mapper = CreateMapper();
+        var gRating = new MovieRating { Id = 1, Code = "G", Name = "General Audiences" };
+        var pgRating = new MovieRating { Id = 2, Code = "PG", Name = "Parental Guidance Suggested" };
         var movies = new List<Movie>
         {
-            new() { Id = 1, Title = "A", Genre = "G", Price = 1m, ReleaseDate = new DateOnly(2020, 1, 1), Rating = "G" },
-            new() { Id = 2, Title = "B", Genre = "PG", Price = 2m, ReleaseDate = new DateOnly(2020, 2, 2), Rating = "PG" },
+            new() { Id = 1, Title = "A", Genre = "G", Price = 1m, ReleaseDate = new DateOnly(2020, 1, 1), MovieRatingId = 1, MovieRating = gRating },
+            new() { Id = 2, Title = "B", Genre = "PG", Price = 2m, ReleaseDate = new DateOnly(2020, 2, 2), MovieRatingId = 2, MovieRating = pgRating },
         };
 
         var dtos = mapper.Map<List<MovieDto>>(movies);
@@ -102,7 +108,7 @@ public class MovieProfileTests
         Assert.Equal(dto.Genre, movie.Genre);
         Assert.Equal(dto.Price, movie.Price);
         Assert.Equal(dto.ReleaseDate, movie.ReleaseDate);
-        Assert.Equal(dto.Rating, movie.Rating);
+        // Rating is not mapped from DTO to entity (resolved by controller)
         // Id should not be mapped (default 0 for new entity)
         Assert.Equal(0, movie.Id);
     }
@@ -147,7 +153,7 @@ public class MovieProfileTests
         Assert.Equal(dto.Genre, movie.Genre);
         Assert.Equal(dto.Price, movie.Price);
         Assert.Equal(dto.ReleaseDate, movie.ReleaseDate);
-        Assert.Equal(dto.Rating, movie.Rating);
+        // Rating is not mapped from DTO to entity (resolved by controller)
         Assert.Equal(0, movie.Id);
     }
 
@@ -162,7 +168,7 @@ public class MovieProfileTests
             Genre = "Original Genre",
             Price = 1.00m,
             ReleaseDate = new DateOnly(2000, 1, 1),
-            Rating = "G"
+            MovieRatingId = 1
         };
 
         var updateDto = new UpdateMovieDto
@@ -181,7 +187,7 @@ public class MovieProfileTests
         Assert.Equal("Updated Genre", existingMovie.Genre);
         Assert.Equal(19.99m, existingMovie.Price);
         Assert.Equal(new DateOnly(2024, 12, 25), existingMovie.ReleaseDate);
-        Assert.Equal("R", existingMovie.Rating);
+        // Rating is not mapped from DTO to entity (resolved by controller)
     }
 
     [Fact]
@@ -195,7 +201,7 @@ public class MovieProfileTests
             Genre = "Keep Me",
             Price = 5.00m,
             ReleaseDate = new DateOnly(2010, 6, 1),
-            Rating = "PG"
+            MovieRatingId = 2
         };
 
         var updateDto = new UpdateMovieDto
@@ -214,7 +220,7 @@ public class MovieProfileTests
         Assert.Equal("New Genre", existingMovie.Genre);
         Assert.Equal(10.00m, existingMovie.Price);
         Assert.Equal(new DateOnly(2020, 6, 1), existingMovie.ReleaseDate);
-        Assert.Equal("PG-13", existingMovie.Rating);
+        // Rating is not mapped from DTO to entity (resolved by controller)
     }
 
     // ── Configuration validation ───────────────────────────────
@@ -248,6 +254,7 @@ public class MovieProfileTests
         // Simulate: create from DTO, save (gets Id), then read back as MovieDto
         var movie = mapper.Map<Movie>(createDto);
         movie.Id = 123; // Simulate DB-generated Id
+        movie.MovieRating = new MovieRating { Id = 2, Code = "PG", Name = "Parental Guidance Suggested" };
 
         var readDto = mapper.Map<MovieDto>(movie);
 
@@ -256,6 +263,6 @@ public class MovieProfileTests
         Assert.Equal(createDto.Genre, readDto.Genre);
         Assert.Equal(createDto.Price, readDto.Price);
         Assert.Equal(createDto.ReleaseDate, readDto.ReleaseDate);
-        Assert.Equal(createDto.Rating, readDto.Rating);
+        Assert.Equal("PG", readDto.Rating);
     }
 }

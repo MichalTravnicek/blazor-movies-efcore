@@ -22,6 +22,8 @@ public class MoviesControllerTests : IDisposable
     {
         _dbName = Guid.NewGuid().ToString();
         _context = CreateContext();
+        
+        SeedData.SeedRatings(_context);
 
         var factory = new TestDbContextFactory(CreateContext);
 
@@ -63,13 +65,15 @@ public class MoviesControllerTests : IDisposable
 
     private async Task<Movie> SeedMovie(string title = "Test Movie")
     {
+        var pg13Id = _context.MovieRating.First(r => r.Code == "PG-13").Id;
+
         var movie = new Movie
         {
             Title = title,
             Genre = "Action",
             Price = 9.99m,
             ReleaseDate = new DateOnly(2024, 1, 1),
-            Rating = "PG-13"
+            MovieRatingId = pg13Id
         };
         _context.Movie.Add(movie);
         await _context.SaveChangesAsync();
@@ -117,13 +121,14 @@ public class MoviesControllerTests : IDisposable
     public async Task GetAll_ReturnsMoviesOrderedByReleaseDate()
     {
         await SeedMovie("Movie C"); // release date 2024-01-01
+        var gId = _context.MovieRating.First(r => r.Code == "G").Id;
         var earlyMovie = new Movie
         {
             Title = "Movie A",
             Genre = "Action",
             Price = 5m,
             ReleaseDate = new DateOnly(2020, 6, 15),
-            Rating = "G"
+            MovieRatingId = gId
         };
         _context.Movie.Add(earlyMovie);
         await _context.SaveChangesAsync();
@@ -153,7 +158,8 @@ public class MoviesControllerTests : IDisposable
         Assert.Equal(movie.Genre, dto.Genre);
         Assert.Equal(movie.Price, dto.Price);
         Assert.Equal(movie.ReleaseDate, dto.ReleaseDate);
-        Assert.Equal(movie.Rating, dto.Rating);
+        // Rating is mapped from MovieRating.Code — verify via the DTO
+        Assert.Equal("PG-13", dto.Rating);
     }
 
     // ── GET /api/movies/{id} ───────────────────────────────────
