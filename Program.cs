@@ -10,6 +10,7 @@ using AutoMapper;
 using BlazorWebAppMovies.Models;
 using BlazorWebAppMovies.Models.Mapping;
 using BlazorWebAppMovies.Components.Handlers;
+using BlazorWebAppMovies.Services;
 using BlazorWebAppMovies;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -131,6 +132,13 @@ builder.Services.AddHttpClient("BlazorApi", client =>
     client.BaseAddress = new Uri("http://localhost");
 })
     .AddHttpMessageHandler<AuthCookieHandler>();
+
+// Register HTTP client for PosterService (TMDB API)
+builder.Services.AddHttpClient<IPosterService, PosterService>(client =>
+{
+    client.BaseAddress = new Uri("https://api.themoviedb.org");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
 
 builder.Services.AddQuickGridEntityFrameworkAdapter();
 

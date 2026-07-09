@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using BlazorWebAppMovies.Data;
 using BlazorWebAppMovies.Models;
 using BlazorWebAppMovies.Models.Dtos;
+using BlazorWebAppMovies.Services;
 
 namespace BlazorWebAppMovies.Controllers;
 
@@ -15,11 +16,16 @@ public class MoviesController : ControllerBase
 {
     private readonly IDbContextFactory<BlazorWebAppMoviesContext> _contextFactory;
     private readonly IMapper _mapper;
+    private readonly IPosterService _posterService;
 
-    public MoviesController(IDbContextFactory<BlazorWebAppMoviesContext> contextFactory, IMapper mapper)
+    public MoviesController(
+        IDbContextFactory<BlazorWebAppMoviesContext> contextFactory,
+        IMapper mapper,
+        IPosterService posterService)
     {
         _contextFactory = contextFactory;
         _mapper = mapper;
+        _posterService = posterService;
     }
 
     /// <summary>
@@ -84,6 +90,14 @@ public class MoviesController : ControllerBase
         context.Movie.Add(movie);
         await context.SaveChangesAsync();
 
+        // Auto-fetch poster from TMDB after creation
+        var posterUrl = await _posterService.FetchPosterUrlAsync(movie.Title, movie.ReleaseDate.Year);
+        if (posterUrl != null)
+        {
+            movie.PosterUrl = posterUrl;
+            await context.SaveChangesAsync();
+        }
+
         var result = _mapper.Map<MovieDto>(movie);
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
@@ -141,5 +155,149 @@ public class MoviesController : ControllerBase
         await context.SaveChangesAsync();
 
         return NoContent();
+    }
+
+    // ── Poster endpoints ──
+
+    /// <summary>
+    /// POST /api/movies/poster/backfill — fetch posters for all movies with null PosterUrl.
+    /// </summary>
+    [HttpPost("poster/backfill")]
+    [AllowAnonymous]
+    public async Task<ActionResult<BackfillResult>> BackfillPosters()
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var movies = await context.Movie
+            .Where(m => m.PosterUrl == null)
+            .ToListAsync();
+
+        var succeeded = 0;
+        var failed = 0;
+        var errors = new List<string>();
+
+        foreach (var movie in movies)
+        {
+            try
+            {
+                var posterUrl = await _posterService.FetchPosterUrlAsync(movie.Title!, movie.ReleaseDate.Year);
+                if (posterUrl != null)
+                {
+                    movie.PosterUrl = posterUrl;
+                    succeeded++;
+                }
+                else
+                {
+                    failed++;
+                }
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                errors.Add($"{movie.Title}: {ex.Message}");
+            }
+        }
+
+        await context.SaveChangesAsync();
+
+        return Ok(new BackfillResult
+        {
+            Total = movies.Count,
+            Succeeded = succeeded,
+            Failed = failed,
+            Errors = errors
+        });
+    }
+
+    /// <summary>
+    /// POST /api/movies/{id}/poster/fetch — auto-download poster from TMDB by movie title.
+    /// </summary>
+    [HttpPost("{id:int}/poster/fetch")]
+    public async Task<ActionResult<MovieDto>> FetchPoster(int id)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var movie = await context.Movie
+            .Include(m => m.MovieRating)
+            .FirstOrDefaultAsync(m => m.Id == id);
+
+        if (movie == null)
+            return NotFound(new { Message = $"Movie with Id {id} not found." });
+
+        var posterUrl = await _posterService.FetchPosterUrlAsync(movie.Title!, movie.ReleaseDate.Year);
+        if (posterUrl == null)
+            return NotFound(new { Message = "No poster found for this movie." });
+
+        movie.PosterUrl = posterUrl;
+        await context.SaveChangesAsync();
+
+        return Ok(_mapper.Map<MovieDto>(movie));
+    }
+
+    /// <summary>
+    /// POST /api/movies/{id}/poster/upload — manually upload a poster image.
+    /// </summary>
+    [HttpPost("{id:int}/poster/upload")]
+    public async Task<ActionResult<MovieDto>> UploadPoster(int id, IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { Message = "No file provided." });
+
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var movie = await context.Movie
+            .Include(m => m.MovieRating)
+            .FirstOrDefaultAsync(m => m.Id == id);
+
+        if (movie == null)
+            return NotFound(new { Message = $"Movie with Id {id} not found." });
+
+        var posterUrl = await _posterService.SavePosterAsync(id, file);
+        movie.PosterUrl = posterUrl;
+        await context.SaveChangesAsync();
+
+        return Ok(_mapper.Map<MovieDto>(movie));
+    }
+
+    /// <summary>
+    /// DELETE /api/movies/{id}/poster — remove the local poster.
+    /// </summary>
+    [HttpDelete("{id:int}/poster")]
+    public async Task<IActionResult> DeletePoster(int id)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var movie = await context.Movie.FindAsync(id);
+
+        if (movie == null)
+            return NotFound(new { Message = $"Movie with Id {id} not found." });
+
+        movie.PosterUrl = null;
+        await context.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// GET /api/movies/{id}/poster — returns the poster image file if local.
+    /// </summary>
+    [HttpGet("{id:int}/poster")]
+    [AllowAnonymous]
+    public IActionResult GetPoster(int id)
+    {
+        var localPath = _posterService.GetLocalPosterPath(id);
+        if (localPath == null)
+            return NotFound();
+
+        var filePath = Path.Combine("wwwroot", localPath.TrimStart('/'));
+        if (!System.IO.File.Exists(filePath))
+            return NotFound();
+
+        var extension = Path.GetExtension(filePath).ToLowerInvariant();
+        var contentType = extension switch
+        {
+            ".webp" => "image/webp",
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            _ => "application/octet-stream"
+        };
+
+        return PhysicalFile(filePath, contentType);
     }
 }

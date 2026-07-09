@@ -31,6 +31,9 @@ namespace BlazorWebAppMovies.Migrations
                     b.Property<int>("MovieRatingId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("PosterUrl")
+                        .HasColumnType("TEXT");
+
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(18, 2)");
 

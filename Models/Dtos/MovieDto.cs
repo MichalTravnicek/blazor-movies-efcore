@@ -12,4 +12,5 @@ public class MovieDto
     public decimal Price { get; set; }
     public DateOnly ReleaseDate { get; set; }
     public string Rating { get; set; } = string.Empty;
+    public string? PosterUrl { get; set; }
 }

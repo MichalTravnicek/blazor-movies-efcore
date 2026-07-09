@@ -3,7 +3,9 @@ using BlazorWebAppMovies.Data;
 using BlazorWebAppMovies.Models.Dtos;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using BlazorWebAppMovies.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Moq;
 
 namespace BlazorWebAppMovies.Tests.BlazorUiTests;
 
@@ -69,7 +71,8 @@ public class BlazorMoviesPageTests : IDisposable
             cfg => cfg.AddProfile<global::BlazorWebAppMovies.Models.Mapping.MovieProfile>(),
             Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance).CreateMapper();
 
-        return new global::BlazorWebAppMovies.Controllers.MoviesController(factory, mapperProvider);
+        var mockPoster = new Mock<IPosterService>();
+        return new global::BlazorWebAppMovies.Controllers.MoviesController(factory, mapperProvider, mockPoster.Object);
     }
 
     // ── Movie list (Index.razor logic) ──────────────────────────

@@ -7,6 +7,7 @@ using BlazorWebAppMovies.Models.Mapping;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using BlazorWebAppMovies.Services;
 using Moq;
 
 namespace BlazorWebAppMovies.Tests.Controllers;
@@ -22,13 +23,14 @@ public class MoviesControllerTests : IDisposable
     {
         _dbName = Guid.NewGuid().ToString();
         _context = CreateContext();
-        
+
         SeedData.SeedRatings(_context);
 
         var factory = new TestDbContextFactory(CreateContext);
 
         _mapper = CreateMapper();
-        _controller = new MoviesController(factory, _mapper);
+        var mockPoster = new Mock<IPosterService>();
+        _controller = new MoviesController(factory, _mapper, mockPoster.Object);
     }
 
     public void Dispose()
@@ -640,8 +642,55 @@ public class MoviesControllerTests : IDisposable
         Assert.Contains(movies, m => m.Title == "Newly Added");
     }
 
+    // ── Poster endpoints ────────────────────────────────────────
+
     [Fact]
-    public async Task GetAll_AfterDelete_ExcludesDeletedMovie()
+    public async Task FetchPoster_WithExistingMovie_WhenNoPosterFound_ReturnsNotFound()
+    {
+        var movie = await SeedMovie("Poster Fetch");
+
+        // Mock returns null for FetchPosterUrlAsync → controller returns 404
+        var result = await _controller.FetchPoster(movie.Id);
+
+        Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
+
+        [Fact]
+        public async Task FetchPoster_WithNonExistentId_ReturnsNotFound()
+        {
+            var result = await _controller.FetchPoster(999);
+
+            Assert.IsType<NotFoundObjectResult>(result.Result);
+        }
+
+        [Fact]
+        public async Task DeletePoster_WithExistingMovie_ReturnsNoContent()
+        {
+            var movie = await SeedMovie("Poster Delete");
+
+            var result = await _controller.DeletePoster(movie.Id);
+
+            Assert.IsType<NoContentResult>(result);
+        }
+
+        [Fact]
+        public async Task DeletePoster_WithNonExistentId_ReturnsNotFound()
+        {
+            var result = await _controller.DeletePoster(999);
+
+            Assert.IsType<NotFoundObjectResult>(result);
+        }
+
+        [Fact]
+        public void GetPoster_WithNonExistentMovie_ReturnsNotFound()
+        {
+            var result = _controller.GetPoster(999);
+
+            Assert.IsType<NotFoundResult>(result);
+        }
+
+    [Fact]
+        public async Task GetAll_AfterDelete_ExcludesDeletedMovie()
     {
         await SeedMovie("Will Be Deleted");
         await SeedMovie("Stays");

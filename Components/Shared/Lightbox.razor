@@ -1,0 +1,70 @@
+@if (_isOpen)
+{
+    <div class="modal fade show d-block" tabindex="0" role="dialog"
+         style="background-color: rgba(0,0,0,0.8);"
+         @onclick="Close" @onkeydown="HandleKeyDown" @ref="_backdropRef">
+        <div class="modal-dialog modal-lg modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content bg-transparent border-0">
+                <div class="modal-header border-0">
+                    <button type="button" class="btn-close btn-close-white" @onclick="Close" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center p-0">
+                    @ChildContent
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _isOpen;
+    private ElementReference _backdropRef;
+
+    /// <summary>
+    /// Content to display inside the lightbox (typically an image).
+    /// </summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// Opens the lightbox and focuses the backdrop for keyboard capture.
+    /// </summary>
+    public async void Open()
+    {
+        Console.WriteLine("[Lightbox] Open() called");
+        _isOpen = true;
+        StateHasChanged();
+
+        // Wait a tick for the DOM to render, then focus the backdrop
+        // so keyboard events (Escape) are captured.
+        await Task.Yield();
+        try
+        {
+            await _backdropRef.FocusAsync();
+            Console.WriteLine("[Lightbox] Backdrop focused");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Lightbox] Focus failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Closes the lightbox.
+    /// </summary>
+    public void Close()
+    {
+        Console.WriteLine("[Lightbox] Close() called");
+        _isOpen = false;
+        StateHasChanged();
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        Console.WriteLine($"[Lightbox] KeyDown: {e.Key}");
+        if (e.Key == "Escape")
+        {
+            Close();
+        }
+    }
+}
