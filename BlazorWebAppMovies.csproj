@@ -30,12 +30,14 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <!-- Hlavní výchozí jazyk vaší aplikace -->
+    <!-- Main language of application -->
     <NeutralLanguage>en</NeutralLanguage>
-
-    <!-- Vynucení, aby se generovaly pouze soubory pro tento jazyk a ostatní se ignorovaly -->
+    <!-- Dont build for other languages -->
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+    <!-- If Windows is current platform build only Windows binaries -->
+  <PropertyGroup Condition="$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
 
 </Project>
