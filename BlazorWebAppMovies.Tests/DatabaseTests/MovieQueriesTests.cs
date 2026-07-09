@@ -14,12 +14,18 @@ public class MovieQueriesTests
 
         var context = new BlazorWebAppMoviesContext(options);
 
+        // Seed lookup ratings first
+        SeedData.SeedRatings(context);
+
+        var rId = context.MovieRating.First(r => r.Code == "R").Id;
+        var pg13Id = context.MovieRating.First(r => r.Code == "PG-13").Id;
+
         context.Movie.AddRange(
-            new Movie { Title = "Mad Max", ReleaseDate = new DateOnly(1979, 4, 12), Genre = "Sci-fi (Cyberpunk)", Price = 2.51m, Rating = "R" },
-            new Movie { Title = "The Road Warrior", ReleaseDate = new DateOnly(1981, 12, 24), Genre = "Sci-fi (Cyberpunk)", Price = 2.78m, Rating = "R" },
-            new Movie { Title = "Mad Max: Beyond Thunderdome", ReleaseDate = new DateOnly(1985, 7, 10), Genre = "Sci-fi (Cyberpunk)", Price = 3.55m, Rating = "PG-13" },
-            new Movie { Title = "Mad Max: Fury Road", ReleaseDate = new DateOnly(2015, 5, 15), Genre = "Sci-fi (Cyberpunk)", Price = 8.43m, Rating = "R" },
-            new Movie { Title = "Furiosa: A Mad Max Saga", ReleaseDate = new DateOnly(2024, 5, 24), Genre = "Sci-fi (Cyberpunk)", Price = 13.49m, Rating = "R" }
+            new Movie { Title = "Mad Max", ReleaseDate = new DateOnly(1979, 4, 12), Genre = "Sci-fi (Cyberpunk)", Price = 2.51m, MovieRatingId = rId },
+            new Movie { Title = "The Road Warrior", ReleaseDate = new DateOnly(1981, 12, 24), Genre = "Sci-fi (Cyberpunk)", Price = 2.78m, MovieRatingId = rId },
+            new Movie { Title = "Mad Max: Beyond Thunderdome", ReleaseDate = new DateOnly(1985, 7, 10), Genre = "Sci-fi (Cyberpunk)", Price = 3.55m, MovieRatingId = pg13Id },
+            new Movie { Title = "Mad Max: Fury Road", ReleaseDate = new DateOnly(2015, 5, 15), Genre = "Sci-fi (Cyberpunk)", Price = 8.43m, MovieRatingId = rId },
+            new Movie { Title = "Furiosa: A Mad Max Saga", ReleaseDate = new DateOnly(2024, 5, 24), Genre = "Sci-fi (Cyberpunk)", Price = 13.49m, MovieRatingId = rId }
         );
 
         await context.SaveChangesAsync();
@@ -66,11 +72,13 @@ public class MovieQueriesTests
         using var context = await GetSeededContext();
 
         var rRated = await context.Movie
-            .Where(m => m.Rating == "R")
+            .Include(m => m.MovieRating)
+            .Where(m => m.MovieRating!.Code == "R")
             .ToListAsync();
 
         var pg13Rated = await context.Movie
-            .Where(m => m.Rating == "PG-13")
+            .Include(m => m.MovieRating)
+            .Where(m => m.MovieRating!.Code == "PG-13")
             .ToListAsync();
 
         Assert.Equal(4, rRated.Count);

@@ -28,12 +28,11 @@ namespace BlazorWebAppMovies.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("MovieRatingId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(18, 2)");
-
-                    b.Property<string>("Rating")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
 
                     b.Property<DateOnly>("ReleaseDate")
                         .HasColumnType("TEXT");
@@ -45,10 +44,33 @@ namespace BlazorWebAppMovies.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("MovieRatingId");
+
                     b.HasIndex("Title")
                         .IsUnique();
 
                     b.ToTable("Movie");
+                });
+
+            modelBuilder.Entity("BlazorWebAppMovies.Models.MovieRating", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("MovieRating");
                 });
 
             modelBuilder.Entity("BlazorWebAppMovies.Models.User", b =>
@@ -246,6 +268,17 @@ namespace BlazorWebAppMovies.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("BlazorWebAppMovies.Models.Movie", b =>
+                {
+                    b.HasOne("BlazorWebAppMovies.Models.MovieRating", "MovieRating")
+                        .WithMany("Movies")
+                        .HasForeignKey("MovieRatingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("MovieRating");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -295,6 +328,11 @@ namespace BlazorWebAppMovies.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("BlazorWebAppMovies.Models.MovieRating", b =>
+                {
+                    b.Navigation("Movies");
                 });
 #pragma warning restore 612, 618
         }

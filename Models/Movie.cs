@@ -24,7 +24,15 @@ public class Movie
     [Column(TypeName = "decimal(18, 2)")]
     public decimal Price { get; set; }
 
+    /// <summary>
+    /// Foreign key to the <see cref="Models.MovieRating"/> lookup table.
+    /// </summary>
     [Required]
-    [RegularExpression(@"^(?i)(G|PG|PG-13|R|NC-17)$")]
-    public string? Rating { get; set; }
+    public int MovieRatingId { get; set; }
+
+    /// <summary>
+    /// Navigation property to the associated movie rating.
+    /// </summary>
+    [ForeignKey(nameof(MovieRatingId))]
+    public MovieRating? MovieRating { get; set; }
 }

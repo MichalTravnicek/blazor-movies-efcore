@@ -6,7 +6,7 @@ namespace BlazorWebAppMovies.Data;
 
 public class SeedData
 {
-    
+
     private static async Task SeedRolesAndAdmin(IServiceProvider serviceProvider)
     {
         var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
@@ -21,7 +21,7 @@ public class SeedData
         {
             await roleManager.CreateAsync(new IdentityRole("User"));
         }
-        
+
         await CreateUserWithRole(userManager, "Admin","admin@example.com","Admin", "Admin123!");
         await CreateUserWithRole(userManager, "Michal","michal@michal.cz","User", "C0mpl3x!Pass");
     }
@@ -47,12 +47,32 @@ public class SeedData
         }
     }
 
+    public static void SeedRatings(BlazorWebAppMoviesContext context)
+    {
+        if (context.MovieRating.Any())
+            return;
+
+        context.MovieRating.AddRange(
+            new MovieRating { Id = 1, Code = "G", Name = "General Audiences" },
+            new MovieRating { Id = 2, Code = "PG", Name = "Parental Guidance Suggested" },
+            new MovieRating { Id = 3, Code = "PG-13", Name = "Parents Strongly Cautioned" },
+            new MovieRating { Id = 4, Code = "R", Name = "Restricted" },
+            new MovieRating { Id = 5, Code = "NC-17", Name = "Adults Only" }
+        );
+        context.SaveChanges();
+    }
+
     private static void SeedMovies(BlazorWebAppMoviesContext context)
     {
         if (context.Movie.Any())
         {
             return;
         }
+
+        SeedRatings(context);
+
+        var rId = context.MovieRating.First(r => r.Code == "R").Id;
+        var pg13Id = context.MovieRating.First(r => r.Code == "PG-13").Id;
 
         context.Movie.AddRange(
             new Movie
@@ -61,7 +81,7 @@ public class SeedData
                 ReleaseDate = new DateOnly(1979, 4, 12),
                 Genre = "Sci-fi (Cyberpunk)",
                 Price = 2.51M,
-                Rating = "R",
+                MovieRatingId = rId,
             },
             new Movie
             {
@@ -69,7 +89,7 @@ public class SeedData
                 ReleaseDate = new DateOnly(1981, 12, 24),
                 Genre = "Sci-fi (Cyberpunk)",
                 Price = 2.78M,
-                Rating = "R",
+                MovieRatingId = rId,
             },
             new Movie
             {
@@ -77,7 +97,7 @@ public class SeedData
                 ReleaseDate = new DateOnly(1985, 7, 10),
                 Genre = "Sci-fi (Cyberpunk)",
                 Price = 3.55M,
-                Rating = "PG-13",
+                MovieRatingId = pg13Id,
             },
             new Movie
             {
@@ -85,7 +105,7 @@ public class SeedData
                 ReleaseDate = new DateOnly(2015, 5, 15),
                 Genre = "Sci-fi (Cyberpunk)",
                 Price = 8.43M,
-                Rating = "R",
+                MovieRatingId = rId,
             },
             new Movie
             {
@@ -93,7 +113,7 @@ public class SeedData
                 ReleaseDate = new DateOnly(2024, 5, 24),
                 Genre = "Sci-fi (Cyberpunk)",
                 Price = 13.49M,
-                Rating = "R",
+                MovieRatingId = rId,
             });
 
         context.SaveChanges();
@@ -101,7 +121,7 @@ public class SeedData
 
     public static async Task Initialize(IDbContextFactory<BlazorWebAppMoviesContext> factory, IServiceProvider serviceProvider)
     {
-        await using var context = factory.CreateDbContext();
+        await using var context = await factory.CreateDbContextAsync();
 
         await SeedRolesAndAdmin(serviceProvider);
         SeedMovies(context);

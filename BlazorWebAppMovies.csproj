@@ -26,6 +26,16 @@
     <Compile Remove="BlazorWebAppMovies.Tests\**\*" />
     <EmbeddedResource Remove="BlazorWebAppMovies.Tests\**\*" />
     <None Remove="BlazorWebAppMovies.Tests\**\*" />
+    <Content Remove="BlazorWebAppMovies.Tests\**\*" />
   </ItemGroup>
+
+  <PropertyGroup>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- Hlavní výchozí jazyk vaší aplikace -->
+    <NeutralLanguage>en</NeutralLanguage>
+
+    <!-- Vynucení, aby se generovaly pouze soubory pro tento jazyk a ostatní se ignorovaly -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
 
 </Project>

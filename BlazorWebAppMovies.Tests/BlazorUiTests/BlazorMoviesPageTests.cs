@@ -29,6 +29,9 @@ public class BlazorMoviesPageTests : IDisposable
         var serviceProvider = services.BuildServiceProvider();
         _scope = serviceProvider.CreateScope();
         _context = _scope.ServiceProvider.GetRequiredService<BlazorWebAppMoviesContext>();
+
+        // Seed the rating lookup data so controller Create/Update can resolve codes
+        SeedData.SeedRatings(_context);
     }
 
     public void Dispose()
@@ -39,10 +42,15 @@ public class BlazorMoviesPageTests : IDisposable
 
     private async Task SeedMovies()
     {
+        // Ratings are already seeded in the constructor — just query the IDs
+        var pg13Id = _context.MovieRating.First(r => r.Code == "PG-13").Id;
+        var pgId = _context.MovieRating.First(r => r.Code == "PG").Id;
+        var rId = _context.MovieRating.First(r => r.Code == "R").Id;
+
         _context.Movie.AddRange(
-            new Models.Movie { Title = "Movie A", Genre = "Action", Price = 9.99m, ReleaseDate = new DateOnly(2024, 1, 1), Rating = "PG-13" },
-            new Models.Movie { Title = "Movie B", Genre = "Comedy", Price = 7.99m, ReleaseDate = new DateOnly(2024, 2, 1), Rating = "PG" },
-            new Models.Movie { Title = "Movie C", Genre = "Drama", Price = 12.99m, ReleaseDate = new DateOnly(2024, 3, 1), Rating = "R" }
+            new Models.Movie { Title = "Movie A", Genre = "Action", Price = 9.99m, ReleaseDate = new DateOnly(2024, 1, 1), MovieRatingId = pg13Id },
+            new Models.Movie { Title = "Movie B", Genre = "Comedy", Price = 7.99m, ReleaseDate = new DateOnly(2024, 2, 1), MovieRatingId = pgId },
+            new Models.Movie { Title = "Movie C", Genre = "Drama", Price = 12.99m, ReleaseDate = new DateOnly(2024, 3, 1), MovieRatingId = rId }
         );
         await _context.SaveChangesAsync();
     }

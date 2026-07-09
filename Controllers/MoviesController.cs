@@ -31,6 +31,7 @@ public class MoviesController : ControllerBase
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var movies = await context.Movie
+            .Include(m => m.MovieRating)
             .OrderBy(m => m.ReleaseDate)
             .ToListAsync();
 
@@ -45,7 +46,9 @@ public class MoviesController : ControllerBase
     public async Task<ActionResult<MovieDto>> GetById(int id)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var movie = await context.Movie.FindAsync(id);
+        var movie = await context.Movie
+            .Include(m => m.MovieRating)
+            .FirstOrDefaultAsync(m => m.Id == id);
 
         if (movie == null)
             return NotFound(new { Message = $"Movie with Id {id} not found." });
@@ -69,8 +72,14 @@ public class MoviesController : ControllerBase
         if (await context.Movie.AnyAsync(m => m.Title!.ToLower() == title.ToLower()))
             return Conflict(new { Message = $"A movie with title '{title}' already exists." });
 
+        // Resolve the rating code to a foreign key
+        var rating = await context.MovieRating.FirstOrDefaultAsync(r => r.Code == dto.Rating);
+        if (rating == null)
+            return BadRequest(new { Message = $"Invalid rating '{dto.Rating}'." });
+
         var movie = _mapper.Map<Movie>(dto);
         movie.Title = title;
+        movie.MovieRatingId = rating.Id;
 
         context.Movie.Add(movie);
         await context.SaveChangesAsync();
@@ -99,9 +108,18 @@ public class MoviesController : ControllerBase
         if (await context.Movie.AnyAsync(m => m.Title!.ToLower() == title.ToLower() && m.Id != id))
             return Conflict(new { Message = $"A movie with title '{title}' already exists." });
 
+        // Resolve the rating code to a foreign key
+        var rating = await context.MovieRating.FirstOrDefaultAsync(r => r.Code == dto.Rating);
+        if (rating == null)
+            return BadRequest(new { Message = $"Invalid rating '{dto.Rating}'." });
+
         // AutoMapper maps the DTO onto the existing entity, preserving the Id
         _mapper.Map(dto, movie);
         movie.Title = title;
+        movie.MovieRatingId = rating.Id;
+
+        // Reload the rating navigation for the response DTO
+        await context.Entry(movie).Reference(m => m.MovieRating).LoadAsync();
         await context.SaveChangesAsync();
 
         return Ok(_mapper.Map<MovieDto>(movie));

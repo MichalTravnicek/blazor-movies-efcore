@@ -80,13 +80,18 @@ public class DbContextProviderTests
         await context.Database.OpenConnectionAsync();
         await context.Database.EnsureCreatedAsync();
 
+        // Seed ratings (no longer in HasData() — SeedData is the single source)
+        SeedData.SeedRatings(context);
+
+        var pgId = context.MovieRating.First(r => r.Code == "PG").Id;
+
         var movie = new Models.Movie
         {
             Title = "SQLite Test",
             ReleaseDate = new DateOnly(2024, 1, 1),
             Genre = "Test",
             Price = 5m,
-            Rating = "PG"
+            MovieRatingId = pgId
         };
 
         context.Movie.Add(movie);

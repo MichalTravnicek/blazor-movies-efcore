@@ -289,3 +289,60 @@ All changes compile without errors or warnings. The project diagnostics show 0 e
 ## Validation
 
 All changes compile without errors or warnings. Project diagnostics: **0 errors, 0 warnings**.
+
+---
+
+# Migration Seed Data Cleanup
+
+**Date:** 2026-07-09
+
+**Issue:** `SeedData.SeedRatings()` was the single source of truth for the 5 MPAA ratings (G/PG/PG-13/R/NC-17), but the same data was also seeded via `HasData()` in the context's `OnModelCreating` and embedded as `InsertData` in the `AddMovieRatingTable` migration files. This caused a runtime `PendingModelChangesWarning` because EF Core detected the model snapshot no longer matched the model (after `HasData` was removed from the context).
+
+**Fix:**
+
+1. **Removed `HasData()` from `Data/BlazorWebAppMoviesContext.cs`** — `OnModelCreating` no longer seeds ratings.
+2. **Removed `InsertData` blocks from both migration `.cs` files** — both Sqlite and SqlServer `AddMovieRatingTable` migrations are now schema-only.
+3. **Removed `b.HasData(...)` from both `.Designer.cs` files** — the migration snapshots no longer include seed data.
+4. **Removed `b.HasData(...)` from both model snapshots** — `BlazorWebAppMoviesContextModelSnapshot.cs` and `BlazorWebAppMoviesContextSqlServerModelSnapshot.cs`.
+5. **Deleted stale `BlazorWebAppMovies.db`** — the old database was created by the old migration with embedded seed data; without deletion, EF's model comparison detected the mismatch.
+6. **Verified** — app starts cleanly, all 4 migrations apply, `SeedData.Initialize()` seeds ratings at startup, **248 tests pass**.
+
+**Decision rationale:** Migration seed data (`HasData`) is appropriate for reference data that is part of the schema (e.g., countries, currencies). Ratings are application data better suited to the seed class, which provides clearer intent and avoids EF Core model snapshot versioning issues. The `PendingModelChangesWarning` was a symptom of the context model and migration snapshot being out of sync — removing `HasData` from both sides resolved it.
+
+**Files affected:**
+- `Data/BlazorWebAppMoviesContext.cs` — `HasData()` removed
+- `Data/SeedData.cs` — stale comment removed, `SeedRatings()` remains as sole source
+- `Migrations/Sqlite/20260708204138_AddMovieRatingTable.cs` — `InsertData` removed
+- `Migrations/Sqlite/20260708204138_AddMovieRatingTable.Designer.cs` — `HasData` removed
+- `Migrations/Sqlite/BlazorWebAppMoviesContextModelSnapshot.cs` — `HasData` removed
+- `Migrations/SqlServer/20260708214605_AddMovieRatingTable.cs` — `InsertData` removed
+- `Migrations/SqlServer/20260708214605_AddMovieRatingTable.Designer.cs` — `HasData` removed
+- `Migrations/SqlServer/BlazorWebAppMoviesContextSqlServerModelSnapshot.cs` — `HasData` removed
+- `BlazorWebAppMovies.db` — deleted (stale)
+
+**Validation:** App starts without errors. 248 tests pass. No `PendingModelChangesWarning`.
+
+---
+
+# Test Seed Data Duplication Cleanup
+
+**Date:** 2026-07-09
+
+**Issue:** After removing `HasData()` from migrations and context, 4 test files still contained inline `AddRange(...)` blocks duplicating the 5 MPAA ratings (G/PG/PG-13/R/NC-17). This violated DRY — `SeedData.SeedRatings()` was the single source of truth.
+
+**Fix:** Replaced every inline `AddRange(...)` call with `SeedData.SeedRatings(context)`:
+
+| File | What Changed |
+|------|-------------|
+| `BlazorWebAppMovies.Tests/DatabaseTests/MovieDbContextTests.cs` | Private `SeedRatings()` method body now delegates to `SeedData.SeedRatings(context)` |
+| `BlazorWebAppMovies.Tests/DatabaseTests/MovieQueriesTests.cs` | `context.MovieRating.AddRange(...)` + `SaveChangesAsync()` replaced with `SeedData.SeedRatings(context)` |
+| `BlazorWebAppMovies.Tests/DatabaseTests/DbContextProviderTests.cs` | `context.MovieRating.AddRange(...)` + `SaveChangesAsync()` replaced with `SeedData.SeedRatings(context)` |
+| `BlazorWebAppMovies.Tests/BlazorUiTests/BlazorMoviesPageTests.cs` | `_context.MovieRating.AddRange(...)` + `SaveChanges()` replaced with `SeedData.SeedRatings(_context)` |
+
+**Not touched (not duplication):**
+- `MovieProfileTests.cs` — creates individual `MovieRating` objects for AutoMapper mapping tests, not seeding
+- `MovieDtoValidationTests.cs` — uses rating strings as test data, not seed data
+
+**Stale DB:** Recreated `BlazorWebAppMovies.db` was deleted again (was causing `PendingModelChangesWarning`).
+
+**Validation:** `dotnet test BlazorWebAppMovies.Tests` — all tests pass.

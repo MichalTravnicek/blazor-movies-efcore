@@ -15,7 +15,7 @@ public class MovieValidationTests
             ReleaseDate = new DateOnly(2010, 7, 16),
             Genre = "Sci-fi",
             Price = 12.99m,
-            Rating = "PG-13"
+            MovieRatingId = 3
         };
 
         var results = ValidateModel(movie);
@@ -34,7 +34,7 @@ public class MovieValidationTests
             ReleaseDate = new DateOnly(2024, 1, 1),
             Genre = "Action",
             Price = 10m,
-            Rating = "PG"
+            MovieRatingId = 2
         };
 
         var results = ValidateModel(movie);
@@ -54,7 +54,7 @@ public class MovieValidationTests
             ReleaseDate = new DateOnly(2024, 1, 1),
             Genre = genre,
             Price = 10m,
-            Rating = "PG"
+            MovieRatingId = 2
         };
 
         var results = ValidateModel(movie);
@@ -73,54 +73,14 @@ public class MovieValidationTests
             ReleaseDate = new DateOnly(2024, 1, 1),
             Genre = "Action",
             Price = price,
-            Rating = "PG"
+            MovieRatingId = 2
         };
 
         var results = ValidateModel(movie);
         Assert.Contains(results, r => r.MemberNames.Contains(nameof(Movie.Price)));
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("PG13")] // Missing hyphen
-    [InlineData("X")]
-    [InlineData("ABC")]
-    public void Movie_InvalidRating_FailsValidation(string? rating)
-    {
-        var movie = new Movie
-        {
-            Title = "Valid Title",
-            ReleaseDate = new DateOnly(2024, 1, 1),
-            Genre = "Action",
-            Price = 10m,
-            Rating = rating
-        };
 
-        var results = ValidateModel(movie);
-        Assert.Contains(results, r => r.MemberNames.Contains(nameof(Movie.Rating)));
-    }
-
-    [Theory]
-    [InlineData("G")]
-    [InlineData("PG")]
-    [InlineData("PG-13")]
-    [InlineData("R")]
-    [InlineData("NC-17")]
-    public void Movie_ValidRating_PassesValidation(string rating)
-    {
-        var movie = new Movie
-        {
-            Title = "Valid Title",
-            ReleaseDate = new DateOnly(2024, 1, 1),
-            Genre = "Action",
-            Price = 10m,
-            Rating = rating
-        };
-
-        var results = ValidateModel(movie);
-        Assert.DoesNotContain(results, r => r.MemberNames.Contains(nameof(Movie.Rating)));
-    }
 
     private static List<ValidationResult> ValidateModel(object model)
     {
