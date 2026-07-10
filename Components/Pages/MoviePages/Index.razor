@@ -26,7 +26,7 @@
         <TemplateColumn Title="Poster" Context="movie">
             @if (!string.IsNullOrEmpty(movie.PosterUrl))
             {
-                <img src="@GetPosterThumbUrl(movie.PosterUrl)" alt="@movie.Title poster"
+                <img src="@movie.PosterUrl" alt="@movie.Title poster"
                      class="movie-poster-thumb" style="height:60px;cursor:pointer;"
                      @onclick="() => OpenLightbox(movie)" />
             }
@@ -72,7 +72,7 @@
                 </div>
             </div>
         }
-        <img src="@GetFullPosterUrl(lightboxMovie.PosterUrl)" alt="@lightboxMovie.Title poster"
+        <img src="@lightboxMovie.PosterUrl" alt="@lightboxMovie.Title poster"
              class="img-fluid" style="max-height:80vh;@(isLightboxLoading ? "display:none;" : "")"
              @onload="OnLightboxImageLoaded" />
     </Lightbox>
@@ -147,63 +147,28 @@
         }
     }
 
-    private string? GetPosterThumbUrl(string? posterUrl)
-    {
-        if (string.IsNullOrEmpty(posterUrl))
-            return null;
-
-        // If it's a TMDB URL, request a smaller size for the thumbnail
-        if (posterUrl.Contains("image.tmdb.org"))
-        {
-            return posterUrl.Replace("/w500", "/w92");
-        }
-
-        return posterUrl;
-    }
-
     private void OpenLightbox(MovieDto movie)
     {
-        Console.WriteLine($"[Index] OpenLightbox: movie={movie.Id} '{movie.Title}', lightbox ref is null? {lightbox is null}");
         lightboxMovie = movie;
         isLightboxLoading = true;
         _pendingLightboxOpen = true;
-        Console.WriteLine("[Index] Set _pendingLightboxOpen=true, waiting for OnAfterRender");
     }
-protected override void OnAfterRender(bool firstRender)
-{
-    if (_pendingLightboxOpen)
+
+    protected override void OnAfterRender(bool firstRender)
     {
-        Console.WriteLine($"[Details] OnAfterRender: lightbox ref is null? {lightbox is null}, calling Open()");
-        if (lightbox is not null)
+        if (_pendingLightboxOpen)
         {
-            _pendingLightboxOpen = false;
-            lightbox.Open();
-        }
-        else
-        {
-            Console.WriteLine("[Details] WARNING: lightbox ref still null after render!");
+            if (lightbox is not null)
+            {
+                _pendingLightboxOpen = false;
+                lightbox.Open();
+            }
         }
     }
-}
 
     private void OnLightboxImageLoaded()
     {
-        Console.WriteLine("[Index] Lightbox image loaded, hiding spinner");
         isLightboxLoading = false;
         StateHasChanged();
-    }
-
-    private string? GetFullPosterUrl(string? posterUrl)
-    {
-        if (string.IsNullOrEmpty(posterUrl))
-            return null;
-
-        // For TMDB URLs, use w500 for the lightbox
-        if (posterUrl.Contains("image.tmdb.org"))
-        {
-            return posterUrl;
-        }
-
-        return posterUrl;
     }
 }

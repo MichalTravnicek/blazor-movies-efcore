@@ -4,6 +4,7 @@ using BlazorWebAppMovies.Data;
 using BlazorWebAppMovies.Models;
 using BlazorWebAppMovies.Models.Dtos;
 using BlazorWebAppMovies.Models.Mapping;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -649,48 +650,86 @@ public class MoviesControllerTests : IDisposable
     {
         var movie = await SeedMovie("Poster Fetch");
 
-        // Mock returns null for FetchPosterUrlAsync → controller returns 404
+        // Mock returns null for FetchAndCachePosterAsync → controller returns 404
         var result = await _controller.FetchPoster(movie.Id);
 
         Assert.IsType<NotFoundObjectResult>(result.Result);
     }
 
-        [Fact]
-        public async Task FetchPoster_WithNonExistentId_ReturnsNotFound()
-        {
-            var result = await _controller.FetchPoster(999);
+    [Fact]
+    public async Task FetchPoster_WithNonExistentId_ReturnsNotFound()
+    {
+        var result = await _controller.FetchPoster(999);
 
-            Assert.IsType<NotFoundObjectResult>(result.Result);
-        }
-
-        [Fact]
-        public async Task DeletePoster_WithExistingMovie_ReturnsNoContent()
-        {
-            var movie = await SeedMovie("Poster Delete");
-
-            var result = await _controller.DeletePoster(movie.Id);
-
-            Assert.IsType<NoContentResult>(result);
-        }
-
-        [Fact]
-        public async Task DeletePoster_WithNonExistentId_ReturnsNotFound()
-        {
-            var result = await _controller.DeletePoster(999);
-
-            Assert.IsType<NotFoundObjectResult>(result);
-        }
-
-        [Fact]
-        public void GetPoster_WithNonExistentMovie_ReturnsNotFound()
-        {
-            var result = _controller.GetPoster(999);
-
-            Assert.IsType<NotFoundResult>(result);
-        }
+        Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
 
     [Fact]
-        public async Task GetAll_AfterDelete_ExcludesDeletedMovie()
+    public async Task UploadPoster_WithNoFile_ReturnsBadRequest()
+    {
+        var result = await _controller.UploadPoster(1, null!);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task UploadPoster_WithNonExistentMovie_ReturnsNotFound()
+    {
+        var fileMock = new Mock<IFormFile>();
+        fileMock.Setup(f => f.FileName).Returns("poster.jpg");
+        fileMock.Setup(f => f.Length).Returns(100);
+        fileMock.Setup(f => f.ContentType).Returns("image/jpeg");
+
+        var result = await _controller.UploadPoster(999, fileMock.Object);
+
+        Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task UploadPoster_WithExistingMovie_ReturnsOk()
+    {
+        var movie = await SeedMovie("Upload Test");
+
+        var fileMock = new Mock<IFormFile>();
+        fileMock.Setup(f => f.FileName).Returns("test.jpg");
+        fileMock.Setup(f => f.Length).Returns(100);
+        fileMock.Setup(f => f.ContentType).Returns("image/jpeg");
+
+        var result = await _controller.UploadPoster(movie.Id, fileMock.Object);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task DeletePoster_WithExistingMovie_ReturnsNoContent()
+    {
+        var movie = await SeedMovie("Poster Delete");
+
+        var result = await _controller.DeletePoster(movie.Id);
+
+        Assert.IsType<NoContentResult>(result);
+    }
+
+    [Fact]
+    public async Task DeletePoster_WithNonExistentId_ReturnsNotFound()
+    {
+        var result = await _controller.DeletePoster(999);
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public void GetPoster_WithNonExistentMovie_ReturnsNotFound()
+    {
+        var result = _controller.GetPoster(999);
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    // ── Delete (movie) ───────────────────────────────────────────
+
+    [Fact]
+    public async Task GetAll_AfterDelete_ExcludesDeletedMovie()
     {
         await SeedMovie("Will Be Deleted");
         await SeedMovie("Stays");

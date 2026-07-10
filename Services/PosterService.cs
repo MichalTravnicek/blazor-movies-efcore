@@ -1,9 +1,11 @@
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace BlazorWebAppMovies.Services;
 
 /// <summary>
-/// Service for fetching movie posters from the TMDB API and managing local poster storage.
+/// Service for fetching movie posters from the TMDB API, caching them locally,
+/// and resolving poster filenames to full URLs (local cache → TMDB CDN fallback).
 /// </summary>
 public class PosterService : IPosterService
 {
@@ -12,7 +14,34 @@ public class PosterService : IPosterService
     private readonly IWebHostEnvironment _environment;
     private readonly ILogger<PosterService> _logger;
 
-    private const string PosterDir = "uploads/posters";
+    // ── Validation constants ──
+
+    private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".jpg", ".jpeg", ".png", ".webp"
+    };
+
+    private static readonly HashSet<string> AllowedMimeTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "image/jpeg", "image/png", "image/webp"
+    };
+
+    private const long MaxFileSize = 5 * 1024 * 1024; // 5 MB
+
+    /// <summary>
+    /// Magic bytes for image types we accept.
+    /// </summary>
+    private static readonly Dictionary<string, byte[]> MagicBytes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [".jpg"] = [0xFF, 0xD8, 0xFF],
+        [".jpeg"] = [0xFF, 0xD8, 0xFF],
+        [".png"] = [0x89, 0x50, 0x4E, 0x47],
+        [".webp"] = [0x52, 0x49, 0x46, 0x46], // "RIFF" — WebP starts with RIFF
+    };
+
+    // ── Constants ──
+
+    private const string PosterDir = "posters";
 
     public PosterService(
         HttpClient httpClient,
@@ -26,8 +55,170 @@ public class PosterService : IPosterService
         _logger = logger;
     }
 
+    // ── Public API ───────────────────────────────────────────────
+
     /// <inheritdoc />
-    public async Task<string?> FetchPosterUrlAsync(string title, int? year)
+    public async Task<string?> FetchAndCachePosterAsync(string title, int? year, int movieId)
+    {
+        var posterPath = await FetchTmdbPosterPathAsync(title, year);
+        if (posterPath == null) return null;
+
+        // posterPath looks like "/abc123.jpg" — strip leading slash
+        var fileName = posterPath.TrimStart('/');
+
+        var imageBaseUrl = _configuration["Tmdb:ImageBaseUrl"] ?? "https://image.tmdb.org/t/p/";
+        var downloadUrl = $"{imageBaseUrl.TrimEnd('/')}/original{posterPath}";
+
+        var slug = GetMovieSlug(title);
+        var cacheDir = GetMovieCacheDir(slug, movieId);
+        Directory.CreateDirectory(cacheDir);
+
+        var destPath = Path.Combine(cacheDir, fileName);
+
+        try
+        {
+            var response = await _httpClient.GetAsync(downloadUrl);
+            response.EnsureSuccessStatusCode();
+
+            await using var stream = await response.Content.ReadAsStreamAsync();
+            await using var fileStream = new FileStream(destPath, FileMode.Create);
+            await stream.CopyToAsync(fileStream);
+
+            _logger.LogInformation("Cached poster for '{Title}' (ID {MovieId}) → {Path}",
+                title, movieId, destPath);
+
+            return fileName;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to download poster image for '{Title}' from {Url}",
+                title, downloadUrl);
+            return fileName; // Still return the filename — we'll fall back to TMDB CDN
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<string> SavePosterAsync(int movieId, string movieTitle, IFormFile file)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+
+        if (file.Length == 0)
+            throw new ArgumentException("Uploaded file is empty.", nameof(file));
+
+        if (file.Length > MaxFileSize)
+            throw new ArgumentException($"File size exceeds the maximum allowed size of {MaxFileSize / 1024 / 1024} MB.");
+
+        var ext = Path.GetExtension(file.FileName);
+        if (!AllowedExtensions.Contains(ext))
+            throw new ArgumentException($"File type '{ext}' is not allowed. Accepted types: {string.Join(", ", AllowedExtensions)}");
+
+        var contentType = file.ContentType ?? "application/octet-stream";
+        if (!AllowedMimeTypes.Contains(contentType))
+            throw new ArgumentException($"MIME type '{contentType}' is not allowed. Accepted types: {string.Join(", ", AllowedMimeTypes)}");
+
+        // Validate magic bytes
+        await using var validationStream = file.OpenReadStream();
+        var header = new byte[8];
+        var bytesRead = await validationStream.ReadAsync(header.AsMemory(0, header.Length));
+
+        if (bytesRead < 4)
+            throw new ArgumentException("File is too small to be a valid image.");
+
+        if (!ValidMagicBytes(ext, header))
+            throw new ArgumentException("File content does not match the declared file type.");
+
+        // Reset stream position for the actual save
+        validationStream.Position = 0;
+        var slug = GetMovieSlug(movieTitle);
+        var cacheDir = GetMovieCacheDir(slug, movieId);
+        Directory.CreateDirectory(cacheDir);
+
+        // Sanitize the filename: keep only alphanumeric + dash + dot
+        var safeFileName = SanitizeFileName(file.FileName);
+        var destPath = Path.Combine(cacheDir, safeFileName);
+
+        await using (var destStream = new FileStream(destPath, FileMode.Create))
+        {
+            await validationStream.CopyToAsync(destStream);
+        }
+
+        _logger.LogInformation("Saved uploaded poster for movie {MovieId} → {Path}", movieId, destPath);
+        return safeFileName;
+    }
+
+    /// <inheritdoc />
+    public string? ResolvePosterUrl(string? posterName, string movieTitle, int movieId, string size = "w500")
+    {
+        if (string.IsNullOrEmpty(posterName))
+            return null;
+
+        var slug = GetMovieSlug(movieTitle);
+        var localPath = GetLocalPathBySlug(movieId, slug, posterName);
+        if (localPath != null)
+            return localPath;
+
+        // Fall back to TMDB CDN
+        var imageBaseUrl = _configuration["Tmdb:ImageBaseUrl"] ?? "https://image.tmdb.org/t/p/";
+        return $"{imageBaseUrl.TrimEnd('/')}/{size}/{posterName}";
+    }
+
+    /// <inheritdoc />
+    public string? GetLocalPosterPath(int movieId, string movieTitle, string? posterName)
+    {
+        if (string.IsNullOrEmpty(posterName))
+            return null;
+
+        var slug = GetMovieSlug(movieTitle);
+        return GetLocalPathBySlug(movieId, slug, posterName);
+    }
+
+    // ── Internal helpers ─────────────────────────────────────────
+
+    private string? GetLocalPathBySlug(int movieId, string slug, string posterName)
+    {
+        var cacheDir = GetMovieCacheDir(slug, movieId);
+        var candidate = Path.Combine(cacheDir, posterName);
+        if (File.Exists(candidate))
+        {
+            var relative = Path.Combine(PosterDir, $"{slug}-{movieId}", posterName);
+            return "/" + relative.Replace('\\', '/');
+        }
+        return null;
+    }
+
+    /// <inheritdoc />
+    public void DeleteLocalPoster(int movieId, string movieTitle, string? posterName)
+    {
+        var slug = GetMovieSlug(movieTitle);
+        var cacheDir = GetMovieCacheDir(slug, movieId);
+        if (Directory.Exists(cacheDir))
+        {
+            Directory.Delete(cacheDir, recursive: true);
+            _logger.LogInformation("Deleted local poster cache for movie {MovieId}", movieId);
+        }
+    }
+
+    /// <inheritdoc />
+    public string GetMovieSlug(string title)
+    {
+        if (string.IsNullOrEmpty(title))
+            return "untitled";
+
+        // Lowercase, replace non-alphanumeric with hyphens, collapse multiple hyphens
+        var slug = title.ToLowerInvariant();
+        slug = Regex.Replace(slug, @"[^a-z0-9\s-]", "");
+        slug = Regex.Replace(slug, @"\s+", "-");
+        slug = Regex.Replace(slug, @"-{2,}", "-");
+        return slug.Trim('-');
+    }
+
+    // ── TMDB API ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Calls TMDB search API and returns the poster_path (e.g., "/abc123.jpg"),
+    /// or null if nothing found.
+    /// </summary>
+    private async Task<string?> FetchTmdbPosterPathAsync(string title, int? year)
     {
         var apiKey = _configuration["Tmdb:ApiKey"];
         if (string.IsNullOrEmpty(apiKey))
@@ -59,55 +250,54 @@ public class PosterService : IPosterService
                 return null;
             }
 
-            var imageBaseUrl = _configuration["Tmdb:ImageBaseUrl"] ?? "https://image.tmdb.org/t/p/";
-            var fullUrl = $"{imageBaseUrl.TrimEnd('/')}/w500{posterPath}";
-            _logger.LogInformation("Found poster for '{Title}': {Url}", title, fullUrl);
-            return fullUrl;
+            _logger.LogInformation("Found poster_path for '{Title}': {Path}", title, posterPath);
+            return posterPath;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to fetch poster for '{Title}' ({Year})", title, year);
+            _logger.LogError(ex, "Failed to fetch poster path for '{Title}' ({Year})", title, year);
             return null;
         }
     }
 
-    /// <inheritdoc />
-    public async Task<string?> SavePosterAsync(int movieId, IFormFile file)
+    // ── File-system helpers ──────────────────────────────────────
+
+    private string GetMovieCacheDir(string slug, int movieId)
     {
-        var uploadsDir = Path.Combine(_environment.WebRootPath, PosterDir);
-        Directory.CreateDirectory(uploadsDir);
-
-        // Save as WebP using the movie ID — thumb and full sizes
-        var thumbPath = Path.Combine(uploadsDir, $"{movieId}_thumb.webp");
-        var fullPath = Path.Combine(uploadsDir, $"{movieId}_full.webp");
-
-        // For now, save the uploaded file directly (resize with ImageSharp would be ideal)
-        // We save the original as full and create a copy as thumb
-        await using (var stream = new FileStream(fullPath, FileMode.Create))
-        {
-            await file.CopyToAsync(stream);
-        }
-
-        // Copy same file as thumb (ImageSharp would resize here)
-        await using (var sourceStream = new FileStream(fullPath, FileMode.Open))
-        await using (var thumbStream = new FileStream(thumbPath, FileMode.Create))
-        {
-            await sourceStream.CopyToAsync(thumbStream);
-        }
-
-        _logger.LogInformation("Saved poster for movie {MovieId}", movieId);
-        return $"/{PosterDir}/{movieId}_full.webp";
+        var dirName = $"{slug}-{movieId}";
+        return Path.Combine(_environment.WebRootPath, PosterDir, dirName);
     }
 
-    /// <inheritdoc />
-    public string? GetLocalPosterPath(int movieId, string size = "thumb")
+    private static string SanitizeFileName(string fileName)
     {
-        var fileName = $"{movieId}_{size}.webp";
-        var fullPath = Path.Combine(_environment.WebRootPath, PosterDir, fileName);
-        return File.Exists(fullPath) ? $"/{PosterDir}/{fileName}" : null;
+        // Keep only the filename (strip any path)
+        var name = Path.GetFileName(fileName);
+
+        // Remove any characters that could cause filesystem issues
+        var sanitized = Regex.Replace(name, @"[^a-zA-Z0-9._-]", "_");
+
+        // If sanitization emptied the name, use a fallback
+        if (string.IsNullOrWhiteSpace(Path.GetFileNameWithoutExtension(sanitized)))
+            sanitized = $"poster{Path.GetExtension(name)}";
+
+        return sanitized;
     }
 
-    // ── TMDB API response models ──
+    private static bool ValidMagicBytes(string ext, byte[] header)
+    {
+        if (!MagicBytes.TryGetValue(ext, out var expected))
+            return false;
+
+        for (var i = 0; i < expected.Length && i < header.Length; i++)
+        {
+            if (header[i] != expected[i])
+                return false;
+        }
+
+        return true;
+    }
+
+    // ── TMDB API response models ─────────────────────────────────
 
     private class TmdbSearchResult
     {

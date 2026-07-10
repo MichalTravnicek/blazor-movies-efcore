@@ -139,32 +139,24 @@
 
     private void OpenLightbox()
     {
-        Console.WriteLine($"[Details] OpenLightbox: lightbox ref is null? {lightbox is null}");
         isLightboxLoading = true;
         _pendingLightboxOpen = true;
-        Console.WriteLine("[Details] Set _pendingLightboxOpen=true, waiting for OnAfterRender");
     }
 
     protected override void OnAfterRender(bool firstRender)
     {
         if (_pendingLightboxOpen)
         {
-            Console.WriteLine($"[Details] OnAfterRender: lightbox ref is null? {lightbox is null}, calling Open()");
             if (lightbox is not null)
             {
                 _pendingLightboxOpen = false;
                 lightbox.Open();
-            }
-            else
-            {
-                Console.WriteLine("[Details] WARNING: lightbox ref still null after render!");
             }
         }
     }
 
     private void OnLightboxImageLoaded()
     {
-        Console.WriteLine("[Details] Lightbox image loaded, hiding spinner");
         isLightboxLoading = false;
         StateHasChanged();
     }

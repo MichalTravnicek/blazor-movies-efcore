@@ -41,7 +41,9 @@ public class MoviesController : ControllerBase
             .OrderBy(m => m.ReleaseDate)
             .ToListAsync();
 
-        return Ok(_mapper.Map<List<MovieDto>>(movies));
+        var dtos = _mapper.Map<List<MovieDto>>(movies);
+        ResolvePosterUrls(dtos);
+        return Ok(dtos);
     }
 
     /// <summary>
@@ -59,7 +61,9 @@ public class MoviesController : ControllerBase
         if (movie == null)
             return NotFound(new { Message = $"Movie with Id {id} not found." });
 
-        return Ok(_mapper.Map<MovieDto>(movie));
+        var dto = _mapper.Map<MovieDto>(movie);
+        ResolvePosterUrl(dto);
+        return Ok(dto);
     }
 
     /// <summary>
@@ -91,14 +95,16 @@ public class MoviesController : ControllerBase
         await context.SaveChangesAsync();
 
         // Auto-fetch poster from TMDB after creation
-        var posterUrl = await _posterService.FetchPosterUrlAsync(movie.Title, movie.ReleaseDate.Year);
-        if (posterUrl != null)
+        var posterName = await _posterService.FetchAndCachePosterAsync(
+            movie.Title, movie.ReleaseDate.Year, movie.Id);
+        if (posterName != null)
         {
-            movie.PosterUrl = posterUrl;
+            movie.PosterUrl = posterName;
             await context.SaveChangesAsync();
         }
 
         var result = _mapper.Map<MovieDto>(movie);
+        ResolvePosterUrl(result);
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
 
@@ -136,11 +142,13 @@ public class MoviesController : ControllerBase
         await context.Entry(movie).Reference(m => m.MovieRating).LoadAsync();
         await context.SaveChangesAsync();
 
-        return Ok(_mapper.Map<MovieDto>(movie));
+        var result = _mapper.Map<MovieDto>(movie);
+        ResolvePosterUrl(result);
+        return Ok(result);
     }
 
     /// <summary>
-    /// DELETE /api/movies/{id} — deletes a movie.
+    /// DELETE /api/movies/{id} — deletes a movie and its local poster files.
     /// </summary>
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
@@ -150,6 +158,9 @@ public class MoviesController : ControllerBase
 
         if (movie == null)
             return NotFound(new { Message = $"Movie with Id {id} not found." });
+
+        // Clean up local poster files
+        _posterService.DeleteLocalPoster(id, movie.Title!, movie.PosterUrl);
 
         context.Movie.Remove(movie);
         await context.SaveChangesAsync();
@@ -171,6 +182,16 @@ public class MoviesController : ControllerBase
             .Where(m => m.PosterUrl == null)
             .ToListAsync();
 
+        if (movies.Count == 0)
+        {
+            return Ok(new BackfillResult
+            {
+                Total = 0,
+                Succeeded = 0,
+                Failed = 0
+            });
+        }
+
         var succeeded = 0;
         var failed = 0;
         var errors = new List<string>();
@@ -179,10 +200,11 @@ public class MoviesController : ControllerBase
         {
             try
             {
-                var posterUrl = await _posterService.FetchPosterUrlAsync(movie.Title!, movie.ReleaseDate.Year);
-                if (posterUrl != null)
+                var posterName = await _posterService.FetchAndCachePosterAsync(
+                    movie.Title!, movie.ReleaseDate.Year, movie.Id);
+                if (posterName != null)
                 {
-                    movie.PosterUrl = posterUrl;
+                    movie.PosterUrl = posterName;
                     succeeded++;
                 }
                 else
@@ -222,14 +244,17 @@ public class MoviesController : ControllerBase
         if (movie == null)
             return NotFound(new { Message = $"Movie with Id {id} not found." });
 
-        var posterUrl = await _posterService.FetchPosterUrlAsync(movie.Title!, movie.ReleaseDate.Year);
-        if (posterUrl == null)
+        var posterName = await _posterService.FetchAndCachePosterAsync(
+            movie.Title!, movie.ReleaseDate.Year, movie.Id);
+        if (posterName == null)
             return NotFound(new { Message = "No poster found for this movie." });
 
-        movie.PosterUrl = posterUrl;
+        movie.PosterUrl = posterName;
         await context.SaveChangesAsync();
 
-        return Ok(_mapper.Map<MovieDto>(movie));
+        var dto = _mapper.Map<MovieDto>(movie);
+        ResolvePosterUrl(dto);
+        return Ok(dto);
     }
 
     /// <summary>
@@ -249,15 +274,26 @@ public class MoviesController : ControllerBase
         if (movie == null)
             return NotFound(new { Message = $"Movie with Id {id} not found." });
 
-        var posterUrl = await _posterService.SavePosterAsync(id, file);
-        movie.PosterUrl = posterUrl;
+        string posterName;
+        try
+        {
+            posterName = await _posterService.SavePosterAsync(id, movie.Title!, file);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+
+        movie.PosterUrl = posterName;
         await context.SaveChangesAsync();
 
-        return Ok(_mapper.Map<MovieDto>(movie));
+        var dto = _mapper.Map<MovieDto>(movie);
+        ResolvePosterUrl(dto);
+        return Ok(dto);
     }
 
     /// <summary>
-    /// DELETE /api/movies/{id}/poster — remove the local poster.
+    /// DELETE /api/movies/{id}/poster — remove the local poster and clear DB field.
     /// </summary>
     [HttpDelete("{id:int}/poster")]
     public async Task<IActionResult> DeletePoster(int id)
@@ -267,6 +303,9 @@ public class MoviesController : ControllerBase
 
         if (movie == null)
             return NotFound(new { Message = $"Movie with Id {id} not found." });
+
+        // Delete local poster files
+        _posterService.DeleteLocalPoster(id, movie.Title!, movie.PosterUrl);
 
         movie.PosterUrl = null;
         await context.SaveChangesAsync();
@@ -281,7 +320,15 @@ public class MoviesController : ControllerBase
     [AllowAnonymous]
     public IActionResult GetPoster(int id)
     {
-        var localPath = _posterService.GetLocalPosterPath(id);
+        // We need the movie title to resolve the local path.
+        // Use a light-weight approach: try known poster names or glob the directory.
+        // Since the DB stores the filename, we fetch the movie.
+        using var context = _contextFactory.CreateDbContext();
+        var movie = context.Movie.Find(id);
+        if (movie == null)
+            return NotFound();
+
+        var localPath = _posterService.GetLocalPosterPath(id, movie.Title!, movie.PosterUrl);
         if (localPath == null)
             return NotFound();
 
@@ -299,5 +346,28 @@ public class MoviesController : ControllerBase
         };
 
         return PhysicalFile(filePath, contentType);
+    }
+
+    // ── Private helpers ──
+
+    /// <summary>
+    /// Resolves the PosterUrl (just a filename) to a full resolvable URL
+    /// on a single MovieDto.
+    /// </summary>
+    private void ResolvePosterUrl(MovieDto dto)
+    {
+        dto.PosterUrl = _posterService.ResolvePosterUrl(
+            dto.PosterUrl, dto.Title, dto.Id, "w500");
+    }
+
+    /// <summary>
+    /// Resolves PosterUrl on every DTO in the list.
+    /// </summary>
+    private void ResolvePosterUrls(List<MovieDto> dtos)
+    {
+        foreach (var dto in dtos)
+        {
+            ResolvePosterUrl(dto);
+        }
     }
 }
