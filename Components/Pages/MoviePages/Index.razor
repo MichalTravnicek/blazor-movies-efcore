@@ -1,8 +1,8 @@
 @page "/movies"
 @rendermode InteractiveServer
-@using System.Net.Http.Json
 @using Microsoft.AspNetCore.Components.QuickGrid
 @inject IHttpClientFactory HttpClientFactory
+@using BlazorWebAppMovies.Components.Shared
 
 <PageTitle>Index</PageTitle>
 
@@ -11,11 +11,32 @@
     @if (authState?.User.Identity?.IsAuthenticated == true)
     {
         <a href="movies/create" class="btn btn-primary btn-sm">+ Create New</a>
+        <button class="btn btn-outline-info btn-sm ms-1" @onclick="BackfillPosters" disabled="@isBackfilling">
+            @if (isBackfilling)
+            {
+                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+            }
+            Fetch Missing Posters
+        </button>
     }
 </div>
 
 <div>
     <QuickGrid Class="table table-striped table-hover" Items="FilteredMovies" Pagination="pagination">
+        <TemplateColumn Title="Poster" Context="movie">
+            @if (!string.IsNullOrEmpty(movie.PosterUrl))
+            {
+                <img src="@movie.PosterUrl" alt="@movie.Title poster"
+                     class="movie-poster-thumb" style="height:60px;cursor:pointer;"
+                     @onclick="() => OpenLightbox(movie)" />
+            }
+            else
+            {
+                <div class="movie-poster-thumb-placeholder" style="height:60px;width:40px;">
+                    <span>🎬</span>
+                </div>
+            }
+        </TemplateColumn>
         <PropertyColumn Property="movie => movie.Title" Sortable="true" />
         <PropertyColumn Property="movie => movie.ReleaseDate" Title="Release Date" />
         <PropertyColumn Property="movie => movie.Genre" />
@@ -40,6 +61,23 @@
 
 <Paginator State="pagination" />
 
+@if (lightboxMovie is not null)
+{
+    <Lightbox @ref="lightbox">
+        @if (isLightboxLoading)
+        {
+            <div class="d-flex justify-content-center align-items-center" style="min-height:300px;">
+                <div class="spinner-border text-light" role="status" style="width:3rem;height:3rem;">
+                    <span class="visually-hidden">Loading poster...</span>
+                </div>
+            </div>
+        }
+        <img src="@lightboxMovie.PosterUrl" alt="@lightboxMovie.Title poster"
+             class="img-fluid" style="max-height:80vh;@(isLightboxLoading ? "display:none;" : "")"
+             @onload="OnLightboxImageLoaded" />
+    </Lightbox>
+}
+
 @code {
     [CascadingParameter]
     private Task<AuthenticationState>? AuthStateTask { get; set; }
@@ -48,6 +86,11 @@
     private List<MovieDto> movies = [];
     private PaginationState pagination = new PaginationState { ItemsPerPage = 5 };
     private string titleFilter = string.Empty;
+    private bool isBackfilling;
+    private bool isLightboxLoading;
+    private bool _pendingLightboxOpen;
+    private Lightbox? lightbox;
+    private MovieDto? lightboxMovie;
 
     private IQueryable<MovieDto> FilteredMovies =>
         movies.AsQueryable().Where(m => m.Title.Contains(titleFilter, StringComparison.OrdinalIgnoreCase));
@@ -80,5 +123,52 @@
         {
             // Silently keep empty list on failure — UI shows an empty table
         }
+    }
+
+    private async Task BackfillPosters()
+    {
+        isBackfilling = true;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("BlazorApi");
+            var response = await client.PostAsync("/api/movies/poster/backfill", null);
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadMovies();
+            }
+        }
+        catch
+        {
+            // Silently handle — button re-enables on finally
+        }
+        finally
+        {
+            isBackfilling = false;
+        }
+    }
+
+    private void OpenLightbox(MovieDto movie)
+    {
+        lightboxMovie = movie;
+        isLightboxLoading = true;
+        _pendingLightboxOpen = true;
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (_pendingLightboxOpen)
+        {
+            if (lightbox is not null)
+            {
+                _pendingLightboxOpen = false;
+                lightbox.Open();
+            }
+        }
+    }
+
+    private void OnLightboxImageLoaded()
+    {
+        isLightboxLoading = false;
+        StateHasChanged();
     }
 }

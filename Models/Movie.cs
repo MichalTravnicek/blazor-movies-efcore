@@ -25,6 +25,11 @@ public class Movie
     public decimal Price { get; set; }
 
     /// <summary>
+    /// Poster image URL (TMDB or local path).
+    /// </summary>
+    public string? PosterUrl { get; set; }
+
+    /// <summary>
     /// Foreign key to the <see cref="Models.MovieRating"/> lookup table.
     /// </summary>
     [Required]
